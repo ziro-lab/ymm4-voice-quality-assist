@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema",
+    "exportSessionId",
     "exportedAt",
     "voices"
   ],
@@ -40,6 +41,10 @@
       "items": {
         "$ref": "#/$defs/voice"
       }
+    },
+    "exportSessionId": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "$defs": {
@@ -47,18 +52,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "exportRef",
         "exportIndex",
         "frame",
         "layer"
       ],
       "properties": {
-        "itemGuid": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "uuid"
-        },
         "exportIndex": {
           "type": "integer",
           "minimum": 0
@@ -70,6 +69,10 @@
         "layer": {
           "type": "integer",
           "minimum": 0
+        },
+        "exportRef": {
+          "type": "string",
+          "pattern": "^voice-[0-9]{6}$"
         }
       }
     },
