@@ -183,7 +183,7 @@ VoiceItem.Pronounce = regenerated Pronounce
 
 PR #128の検証では、target PauseMoraを`0.25 -> 0.0`へ変更した後、同じ実VoiceItemの音声ファイルへ再合成でき、最終`/synthesis`前に新しい`/audio_query`は発生しませんでした。
 
-Undo/Redo・interactive preview cache・Effect disable/removeは、このapply routeとは別のlifecycle境界として検証します。
+Undo/Redo・interactive preview cache・Effect lifecycleは、このapply routeとは別のlifecycle境界として検証します。Undo/RedoはPR #130、Effect disable/removeはPR #134で閉じています。
 
 ## 5.3 Proven persistence boundary
 
@@ -298,6 +298,36 @@ snapshot復元後は`VoiceItem.ClearVoiceCache()`を呼び、Pronounceと実音�
 実ホストではpublic `UndoAsync()/RedoAsync()`だけでなく、YMM4の標準`CommandSettings.Default[CommandType.Undo/Redo]`からも同じ履歴が実行され、pause値とWAV SHA256がbaseline/corrected間で完全に往復しました。
 
 ただしPR #130のLab probeはcurrent `UndoRedoManager`取得にbounded reflectionを使っています。manager自身の操作surfaceはpublicですが、**製品側でcurrent managerを取得する経路は別途Plugin APIから確定する**必要があります。Reference上は`TimelineToolInfo.UndoRedoManager`が有力候補です。
+
+## 5.5 Proven Assist Effect lifecycle
+
+Lab PR #134で、Assist Effectの有効状態・存在状態をCorrectionのactive/inactive境界として使い、実VoiceItemのPronounceとWAVを両方整合させられることを確認済みです。
+
+```text
+Effect present + enabled
+        ↓
+fresh analysis
+        ↓
+Correction apply
+        ↓
+pause = 0.0 / corrected WAV
+
+Effect disabled or removed
+        ↓
+fresh baseline analysis/synthesis
+        ↓
+pause = 0.25 / baseline WAV
+
+Effect re-enabled
+        ↓
+Correction reapply
+        ↓
+same corrected WAV
+```
+
+検証ではcorrected WAVとbaseline WAVを異なる内容にし、SHA256でenabled → corrected、disabled → baseline、re-enabled → same corrected、removed → same baselineの完全な往復を確認しました。`Effect.IsEnabled`変更通知と`VoiceItem.JimakuVideoEffects`変更通知も同じ実ホスト経路で観測されています。
+
+製品Controllerはこの状態遷移をdebounce/coalesceして実行すればよく、Effect無効化・削除時に補正済み音声を残し続ける設計にはしません。
 
 ## 6. Voice Review Bridge
 
