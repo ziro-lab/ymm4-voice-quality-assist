@@ -4,7 +4,7 @@
 
 ## Track A — Local Pronunciation Assist
 
-### A0. Host route closure — PUBLIC ROUTE PROVEN / LIFECYCLE IN PROGRESS
+### A0. Host route closure — REAL VOICEITEM ROUTE PROVEN / LIFECYCLE IN PROGRESS
 
 目的: private/internal APIへ製品が直接依存せず、補正済みPronounceを通常のYMM4合成経路へ流す。
 
@@ -21,9 +21,10 @@
 残:
 
 - [x] public `IVoiceSpeaker.CreateVoiceAsync` synthesis routeを実通信で確認
-- [ ] 実VoiceItemで生成→補正→再生成を通す
+- [x] 実VoiceItemで生成→補正→再生成を通す
 - [ ] Undo/Redo方針
 - [ ] save/reload persistence
+- [ ] preview/audio cache更新の実機挙動
 - [ ] Effect disable/remove時の挙動
 
 ### A1. Zero-pause boundary MVP
