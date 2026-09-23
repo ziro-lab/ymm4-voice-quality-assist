@@ -59,6 +59,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   補正前後のPronounce + WAVを1つのUndo単位として保持し、public `UndoAsync/RedoAsync` とYMM4標準 `CommandType.Undo/Redo` の両方で正確に往復できることを確認。
 - [PR #133](https://github.com/ziro-lab/chat-native-work-lab-001/pull/133)  
   実Timeline ToolへYMM4自身が渡すpublic `TimelineToolInfo.UndoRedoManager` を確認。製品側でMainViewModel/private field reflectionを使わずcurrent Undo managerを取得可能。
+- [PR #135](https://github.com/ziro-lab/chat-native-work-lab-001/pull/135)  
+  実VoiceItemのbaseline/corrected WAV差し替え、public `VoiceCache` + `ClearVoiceCache()`、Pronounce再装着、`Timeline.CurrentFrame`通知まで4.56.1.0で確認。専用preview/audio強制refresh APIは確認されず、通常host state経路を採用。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -89,7 +91,9 @@ save/reloadの永続化境界に加えて、**reload後に`<w0>` + Assist Effect
 
 Undo/Redoの履歴semanticsに加えて、current `UndoRedoManager` をpublic `TimelineToolInfo.UndoRedoManager` から受け取る製品向け経路も実ホストで成立しました。
 
-現在の大きな技術課題は、**プレビュー/audio cache更新を閉じ、製品Controllerのtrigger/debounceを実装へ落とすこと**です。
+A0の主要host routeは閉じました。補正WAV差し替え後はpublic `ClearVoiceCache()`でstale cacheを破棄し、regenerated Pronounceを戻して通常のhost state通知へ流します。CIでは物理スピーカーの知覚確認までは主張しませんが、製品統合を止める専用refresh API依存はありません。
+
+次の主作業は、**A1 Zero-pause boundary MVPとしてAssist Effect / VoiceItem Controller / `<w0>`境界解決 / pause=0再生成を製品コードへ落とすこと**です。
 
 ## Documents
 
