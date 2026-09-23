@@ -297,7 +297,9 @@ snapshot復元後は`VoiceItem.ClearVoiceCache()`を呼び、Pronounceと実音�
 
 実ホストではpublic `UndoAsync()/RedoAsync()`だけでなく、YMM4の標準`CommandSettings.Default[CommandType.Undo/Redo]`からも同じ履歴が実行され、pause値とWAV SHA256がbaseline/corrected間で完全に往復しました。
 
-ただしPR #130のLab probeはcurrent `UndoRedoManager`取得にbounded reflectionを使っています。manager自身の操作surfaceはpublicですが、**製品側でcurrent managerを取得する経路は別途Plugin APIから確定する**必要があります。Reference上は`TimelineToolInfo.UndoRedoManager`が有力候補です。
+PR #133でcurrent `UndoRedoManager` の製品向け取得経路も閉じました。real `ITimelineToolViewModel.SetTimelineToolInfo(TimelineToolInfo)` へYMM4自身が渡す `TimelineToolInfo.UndoRedoManager` はnon-nullで、`AddCommand` / `Record` / `UndoAsync` / `RedoAsync` までpublicです。
+
+したがって製品のtimeline-tool/controller境界では、MainViewModel/private field reflectionを使わず、host-supplied `TimelineToolInfo.UndoRedoManager` を保持してPR #130のUndo/Redo apply unitへ渡します。
 
 ## 5.5 Proven Assist Effect lifecycle
 
