@@ -67,18 +67,20 @@ VOICEVOXのbaseline pitchへ相対的に適用し、固定絶対値は避ける�
 
 ### B0. Interchange design
 
-- [ ] VoiceItemの安定参照方法をLab確認
-- [ ] export schema v0
-- [ ] correction proposal schema v0
-- [ ] source fingerprint / stale detection
-- [ ] version field
-- [ ] validation rules
+- [x] VoiceItemにpublic安定Guidが無いことをLab確認
+- [x] v0 identity方針: session ref + fingerprint + locator
+- [x] export schema v0 Draft
+- [x] correction proposal schema v0 Draft
+- [x] version field Draft
+- [ ] source fingerprint canonicalizationをfreeze
+- [ ] cross-session再解決アルゴリズムをLab/Unit test
+- [ ] validation rules実装
 
 ### B1. Export
 
 候補出力:
 
-- [ ] JSON
+- [x] JSON schema / example Draft
 - [ ] 人間向けCSV/XLSX view
 
 含めたい情報:
