@@ -12,7 +12,8 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 | [PR #118 — VoiceItem observer](https://github.com/ziro-lab/chat-native-work-lab-001/pull/118) | Serif / Hatsuon / JimakuVideoEffects / Effect.IsEnabledの変更通知取得。 | 製品Controllerの寿命管理 |
 | [PR #123 — Official control-tag bridge](https://github.com/ziro-lab/chat-native-work-lab-001/pull/123) | `<w0>`は字幕上で幅を持たず非表示。Serifには残る。public `ControlTagParser`からclean textとTimingTag位置取得。複数marker位置も確認。 | 実VOICEVOX voice providerを使ったSerif→Hatsuon全経路 |
 | [PR #127 — Voice Review item identity](https://github.com/ziro-lab/chat-native-work-lab-001/pull/127) | VoiceItemにはpublic Guid/Id surfaceがなく、standalone serializationにもGuidなし。Timeline上ではlive object参照を保持。 | cross-session再解決アルゴリズムの最終実装 |
-| [PR #125 — Public modified AudioQuery synthesis](https://github.com/ziro-lab/chat-native-work-lab-001/pull/125) | public `IVoiceSpeaker.CreateVoiceAsync(...)`で補正済みAudioQueryを`/audio_query`再呼出しなしに`/synthesis`へ渡し、WAV生成まで完走。 | 実VoiceItemの生成→補正→再生成ライフサイクル |
+| [PR #125 — Public modified AudioQuery synthesis](https://github.com/ziro-lab/chat-native-work-lab-001/pull/125) | public `IVoiceSpeaker.CreateVoiceAsync(...)`で補正済みAudioQueryを`/audio_query`再呼出しなしに`/synthesis`へ渡し、WAV生成まで完走。 | 実VoiceItemへの接続はPR #128で検証。 |
+| [PR #128 — Real VoiceItem regeneration lifecycle](https://github.com/ziro-lab/chat-native-work-lab-001/pull/128) | 実Timeline VoiceItemで通常生成し、public speakerからPronounceを取得・補正後、同じ`VoiceItem.FilePath`へ再合成。最終`/synthesis`前に`/audio_query`再解析なし。cache無効化後も補正済みPronounceをVoiceItemへ保持。 | Undo/Redo、save/reload、interactive preview cache、Effect disable/remove。 |
 
 ## Current evidence chain
 
@@ -43,9 +44,15 @@ public IVoiceSpeaker.CreateVoiceAsync
       │
       ▼
 /synthesis without /audio_query re-analysis
+      │
+      ▼
+real VoiceItem.FilePath
+      │
+      ├─ ClearVoiceCache()
+      └─ corrected Pronounce retained on VoiceItem
 ```
 
-public合成接続点はPR #125で閉じました。残る主なLocal Assist課題は、実VoiceItemでの生成→補正→再生成・Undo/Redo・save/reloadです。Voice Review側のv0 identityは、Guidではなくsession ref + fingerprint再解決を採用します。
+public合成接続点はPR #125、実VoiceItemへの生成→補正→再生成E2EはPR #128で閉じました。残る主なLocal Assist課題は、Undo/Redo・save/reload・interactive preview cache・Effect disable/removeです。Voice Review側のv0 identityは、Guidではなくsession ref + fingerprint再解決を採用します。
 
 ## Evidence labels
 
