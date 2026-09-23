@@ -53,6 +53,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   実プロジェクトsave/reloadで`<w0>`・Hatsuon・Assist Effect・Effect設定/有効状態が復元されることを確認。一方、`VoiceItem.Pronounce`は保存されないため、reload後は宣言的な補正情報から再構築する。
 - [PR #132](https://github.com/ziro-lab/chat-native-work-lab-001/pull/132)  
   reload後の実VoiceItemで、永続化された`<w0>` + Assist Effect設定を再解決し、fresh Pronounceのpause `0.25 -> 0.0`補正→public再合成→cache無効化→Pronounce再装着までE2E確認。
+- [PR #134](https://github.com/ziro-lab/chat-native-work-lab-001/pull/134)  
+  Assist Effectのenable → disable → re-enable → removeで、補正済み/baselineのPronounceと実WAVが同じSHA256へ正確に往復することを確認。
 - [PR #130](https://github.com/ziro-lab/chat-native-work-lab-001/pull/130)  
   補正前後のPronounce + WAVを1つのUndo単位として保持し、public `UndoAsync/RedoAsync` とYMM4標準 `CommandType.Undo/Redo` の両方で正確に往復できることを確認。
 
@@ -85,7 +87,7 @@ save/reloadの永続化境界に加えて、**reload後に`<w0>` + Assist Effect
 
 Undo/Redoの履歴semanticsも実ホストで成立しました。残る取得境界として、製品コードがcurrent `UndoRedoManager` をreflectionなしで受け取るPlugin API経路を確定させる必要があります。
 
-現在の大きな技術課題は、**Undo managerのpublic取得経路・プレビュー/audio cache更新・Assist Effect無効化/削除までライフサイクルを閉じること**です。
+現在の大きな技術課題は、**Undo managerのpublic取得経路とプレビュー/audio cache更新を閉じ、製品Controllerのtrigger/debounceを実装へ落とすこと**です。
 
 ## Documents
 
