@@ -81,6 +81,7 @@ synthesis
 - [Native Evidence](docs/EVIDENCE.md)
 - [LLM Voice Review Bridge](docs/REVIEW_BRIDGE.md)
 - [Review Bridge Schema v0](docs/SCHEMA_V0.md)
+- [Source Fingerprint v0](docs/FINGERPRINT_V0.md)
 - [Contributor / Agent Rules](AGENTS.md)
 
 ## Repository policy
