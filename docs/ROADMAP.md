@@ -25,7 +25,7 @@
 
 残:
 
-- [ ] current UndoRedoManagerのproduct-grade public取得経路
+- [x] current UndoRedoManagerのproduct-grade public取得経路（`TimelineToolInfo.UndoRedoManager`）
 - [ ] preview/audio cache更新の実機挙動
 - [x] Effect disable/remove時のbaseline復元 / re-enable再適用
 
