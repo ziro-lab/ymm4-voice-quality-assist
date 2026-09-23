@@ -132,6 +132,26 @@ Correction Modelは「誰が判断したか」と「どう適用するか」を�
 
 のどれでも、同じApply層へ渡せることを目標にします。
 
+## 5.1 Proven VOICEVOX synthesis route
+
+YMM4 4.56.1.0の実ホスト検証で、補正済み`VOICEVOXVoicePronounce`をpublic `IVoiceSpeaker.CreateVoiceAsync(text, pronounce, parameter, filePath)`へ渡した場合、AudioQueryが再解析されずそのままVOICEVOX `/synthesis`へ送られることを確認済みです。
+
+```text
+modified VOICEVOXVoicePronounce
+        ↓
+public IVoiceSpeaker.CreateVoiceAsync
+        ↓
+YMM4 configured VOICEVOXEngine
+        ↓
+POST /synthesis
+        ↓
+WAV
+```
+
+この経路では既存Pronounceが渡されている場合、検証条件下で`/audio_query`は再呼び出しされません。
+
+製品側はinternal `VOICEVOXEngine.CreateVoiceFileAsync`を直接呼ぶ設計にしません。
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
