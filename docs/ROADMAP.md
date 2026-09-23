@@ -23,7 +23,8 @@
 - [x] public `IVoiceSpeaker.CreateVoiceAsync` synthesis routeを実通信で確認
 - [x] 実VoiceItemで生成→補正→再生成を通す
 - [ ] Undo/Redo方針
-- [ ] save/reload persistence
+- [x] save/reload persistence境界（`<w0>` / Hatsuon / Assist Effect / 設定は復元、`Pronounce`は非永続）
+- [ ] reload後のCorrection再解決→Pronounce/WAV再生成
 - [ ] preview/audio cache更新の実機挙動
 - [ ] Effect disable/remove時の挙動
 
