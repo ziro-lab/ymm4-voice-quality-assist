@@ -227,6 +227,37 @@ VoiceItem.FilePath
 
 これによりVOICEVOX側の再解析結果やYMM4の一時Pronounce objectへ永続性を依存しません。reload直後の自動再適用タイミングは別lifecycle sliceで確定します。
 
+## 5.4 Proven Undo / Redo apply unit
+
+Lab PR #130で、1 VoiceItemの補正適用をYMM4 host historyへ1つのUndo単位として載せられることを確認済みです。
+
+補正前後で保持するsnapshot:
+
+```text
+CorrectionApplySnapshot
+├─ Pronounce
+└─ VoiceItem.FilePath の WAV bytes
+```
+
+apply時:
+
+```text
+corrected snapshotを適用
+  ↓
+UndoRedoManager.AddCommand(
+  Undo -> baseline snapshot
+  Redo -> corrected snapshot
+)
+  ↓
+UndoRedoManager.Record()
+```
+
+snapshot復元後は`VoiceItem.ClearVoiceCache()`を呼び、Pronounceと実音声ファイルを同じ履歴境界で揃えます。
+
+実ホストではpublic `UndoAsync()/RedoAsync()`だけでなく、YMM4の標準`CommandSettings.Default[CommandType.Undo/Redo]`からも同じ履歴が実行され、pause値とWAV SHA256がbaseline/corrected間で完全に往復しました。
+
+ただしPR #130のLab probeはcurrent `UndoRedoManager`取得にbounded reflectionを使っています。manager自身の操作surfaceはpublicですが、**製品側でcurrent managerを取得する経路は別途Plugin APIから確定する**必要があります。Reference上は`TimelineToolInfo.UndoRedoManager`が有力候補です。
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
