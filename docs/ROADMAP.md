@@ -4,7 +4,7 @@
 
 ## Track A — Local Pronunciation Assist
 
-### A0. Host route closure — REAL VOICEITEM ROUTE PROVEN / LIFECYCLE IN PROGRESS
+### A0. Host route closure — CORE ROUTE / PERSISTENCE / REAPPLY PROVEN
 
 目的: private/internal APIへ製品が直接依存せず、補正済みPronounceを通常のYMM4合成経路へ流す。
 
@@ -17,15 +17,15 @@
 - [x] 公式`<w0>` marker transport確認
 - [x] 公式ControlTagParserからclean text / boundary position取得
 - [x] modified AudioQueryが再解析されず`/synthesis`へ届くことを確認
-
-残:
-
 - [x] public `IVoiceSpeaker.CreateVoiceAsync` synthesis routeを実通信で確認
 - [x] 実VoiceItemで生成→補正→再生成を通す
 - [x] Undo/Redo apply-unit semantics（Pronounce + WAVを1 Record、標準Undo/Redo commandで往復）
-- [ ] current UndoRedoManagerのproduct-grade public取得経路
 - [x] save/reload persistence境界（`<w0>` / Hatsuon / Assist Effect / 設定は復元、`Pronounce`は非永続）
-- [ ] reload後のCorrection再解決→Pronounce/WAV再生成
+- [x] reload後のCorrection再解決→fresh Pronounce/WAV再生成
+
+残:
+
+- [ ] current UndoRedoManagerのproduct-grade public取得経路
 - [ ] preview/audio cache更新の実機挙動
 - [ ] Effect disable/remove時の挙動
 
