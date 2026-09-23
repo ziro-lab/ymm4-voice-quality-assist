@@ -3,7 +3,6 @@
 Status: **DRAFT / CANDIDATE**
 
 この文書はVoice Review Bridgeの最初の交換形式を具体化します。
-YMM4側の安定Item identityはLab検証中のため、`itemGuid`の最終freezeはまだ行いません。
 
 ## 1. Design goals
 
@@ -11,33 +10,55 @@ YMM4側の安定Item identityはLab検証中のため、`itemGuid`の最終freez
 - LLMはYMM4プロジェクト全体を書き換えない
 - Proposalは構造化operationだけを返す
 - Import時に元データ変更を検知できる
-- VoiceItemがタイムライン上で移動しても、同一Itemなら再照合できる
+- タイムライン移動だけで別Item扱いしない
+- 対象が一意に解決できない場合は自動適用しない
 - unknown operationは黙って無視しない
 
-## 2. Target identity
+## 2. Identity model
 
-draft:
+Labで確認した結果、YMM4 4.56.1.0の`VoiceItem`にはPlugin APIから読める安定Guid surfaceがありません。
+そのためv0では`itemGuid`を主キーにしません。
+
+### Same-session identity
+
+ExportしたYMM4セッションが生きている間は、Plugin内部で
+
+```text
+exportSessionId + exportRef -> actual VoiceItem object
+```
+
+の対応を保持します。
+
+package側:
 
 ```json
-"target": {
-  "itemGuid": "00000000-0000-0000-0000-000000000000",
-  "exportIndex": 12,
-  "frame": 420,
-  "layer": 3
+{
+  "exportSessionId": "session-...",
+  "target": {
+    "exportRef": "voice-000012",
+    "exportIndex": 12,
+    "frame": 420,
+    "layer": 3
+  }
 }
 ```
 
-- `itemGuid`: 主識別子候補
-- `exportIndex`: そのExport内の安定した表示順
-- `frame/layer`: 人間向けlocator。identityそのものには使わない
+### Cross-session re-resolution
 
-### Why frame/layer is not identity
+YMM4を閉じた後にImportする場合は、`exportRef`だけでは足りません。
+次を使って再解決します。
 
-レビュー中にアイテムを移動しただけで別Item扱いにすると使いにくいためです。
+1. `sourceFingerprint` 完全一致
+2. frame/layer/character/contextをlocatorとして候補絞り込み
+3. 一意なら適用候補
+4. 0件なら`MISSING`
+5. 複数件なら`AMBIGUOUS`
+
+`AMBIGUOUS`は自動適用しません。
 
 ## 3. Source fingerprint
 
-`sourceFingerprint` はstale proposal検知に使います。
+`sourceFingerprint` はstale proposal検知とcross-session再解決の中核です。
 
 v0 candidate input:
 
@@ -50,7 +71,7 @@ assist-relevant source controls
 
 をcanonical JSONへ正規化し、SHA-256を計算する案です。
 
-含めない候補:
+原則含めない:
 
 - frame
 - layer
@@ -58,21 +79,20 @@ assist-relevant source controls
 - UI-only state
 - generated cache path
 
-Import時:
-
-```text
-itemGuid一致
-  ↓
-現在のsourceFingerprint一致？
-  ├ yes → proposal適用候補
-  └ no  → STALE。自動適用しない
-```
+理由は、VoiceItemを移動しただけでレビュー内容までstaleにしたくないためです。
 
 ## 4. Export package
 
 schema: `ymm4.voice-review.v0`
 
-Voice record required fields:
+top-level required:
+
+- schema
+- exportSessionId
+- exportedAt
+- voices
+
+Voice record required:
 
 - target
 - sourceFingerprint
@@ -80,10 +100,11 @@ Voice record required fields:
 - serif
 - hatsuon
 - context
+- controls
 
 ### Context
 
-LLMが文脈読みを判断できるよう、最低限前後Voiceの文章を持たせます。前後が無い場合はnull。
+LLMが文脈読みを判断できるよう、最低限前後Voiceの文章を持たせます。
 
 ### Derived official control information
 
@@ -102,6 +123,8 @@ Local parserで取れる情報はLLMに再解析させません。
 
 schema: `ymm4.voice-corrections.v0`
 
+Proposalは元packageの`exportSessionId`を返します。
+
 v0 operation候補:
 
 - `setReading`
@@ -114,32 +137,31 @@ v0 operation候補:
 
 ### addBoundary
 
-位置は**control-tag除去後のclean text上のUTF-16 index**をv0候補とします。
-Unicode境界問題があるため、日本語・絵文字・サロゲートペアを実装前にLab/Unit testで確認します。
+位置はcontrol-tag除去後のclean text上のUTF-16 indexをv0候補とします。
+Unicode境界問題は実装前に日本語・絵文字・サロゲートペアで確認します。
 
-### helper mora
+## 6. Import resolution states
 
-helper表現自体が未freezeなのでoperationは予約候補です。
+- `EXACT_SESSION_MATCH`
+- `EXACT_FINGERPRINT_MATCH`
+- `STALE`
+- `MISSING`
+- `AMBIGUOUS`
 
-## 6. Review metadata
-
-LLM出力は理由を持てますが、自由文章は適用ロジックに使いません。
-`confidence` は表示用で、自動採用判定へ直結させません。
+`STALE / MISSING / AMBIGUOUS` は自動適用しません。
 
 ## 7. Import validation
 
 最低限:
 
 1. schema/version一致
-2. target存在
-3. itemGuid一致
+2. exportSessionId整合
+3. target解決
 4. sourceFingerprint一致
 5. operation type既知
 6. operation payload妥当
 7. cleanTextPosition範囲内
 8. before/after diff生成
-
-一つでも危険条件なら、そのCorrectionは適用しません。
 
 ## 8. JSON / XLSX split
 
