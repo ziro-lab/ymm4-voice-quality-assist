@@ -183,7 +183,49 @@ VoiceItem.Pronounce = regenerated Pronounce
 
 PR #128の検証では、target PauseMoraを`0.25 -> 0.0`へ変更した後、同じ実VoiceItemの音声ファイルへ再合成でき、最終`/synthesis`前に新しい`/audio_query`は発生しませんでした。
 
-Undo/Redo・save/reload・interactive preview cache・Effect disable/removeは、このapply routeとは別のlifecycle境界として検証します。
+Undo/Redo・interactive preview cache・Effect disable/removeは、このapply routeとは別のlifecycle境界として検証します。
+
+## 5.3 Proven persistence boundary
+
+Lab PR #131で、実YMM4プロジェクトのsave/reload境界を確認済みです。
+
+永続化される補正source:
+
+```text
+VoiceItem.Serif
+  └─ official <w0> marker
+
+VoiceItem.Hatsuon
+
+VoiceItem.JimakuVideoEffects
+  └─ Assist Effect
+       ├─ IsEnabled
+       └─ plugin settings
+```
+
+一方、YMM4 4.56.1.0の検証条件では`VoiceItem.Pronounce`はreload後に`null`となり、補正済みAudioQuery自体はproject persistenceではありません。
+
+したがって製品では、生成物を永続状態として扱わず、宣言的な補正意図をsource of truthにします。
+
+```text
+save
+  ↓
+Serif / marker + Assist Effect settings
+  ↓
+reload
+  ↓
+Correctionを再解決
+  ↓
+fresh Pronounce / AudioQuery
+  ↓
+補正
+  ↓
+public synthesis
+  ↓
+VoiceItem.FilePath
+```
+
+これによりVOICEVOX側の再解析結果やYMM4の一時Pronounce objectへ永続性を依存しません。reload直後の自動再適用タイミングは別lifecycle sliceで確定します。
 
 ## 6. Voice Review Bridge
 
