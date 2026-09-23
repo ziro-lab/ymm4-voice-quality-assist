@@ -57,6 +57,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   Assist Effectのenable → disable → re-enable → removeで、補正済み/baselineのPronounceと実WAVが同じSHA256へ正確に往復することを確認。
 - [PR #130](https://github.com/ziro-lab/chat-native-work-lab-001/pull/130)  
   補正前後のPronounce + WAVを1つのUndo単位として保持し、public `UndoAsync/RedoAsync` とYMM4標準 `CommandType.Undo/Redo` の両方で正確に往復できることを確認。
+- [PR #133](https://github.com/ziro-lab/chat-native-work-lab-001/pull/133)  
+  実Timeline ToolへYMM4自身が渡すpublic `TimelineToolInfo.UndoRedoManager` を確認。製品側でMainViewModel/private field reflectionを使わずcurrent Undo managerを取得可能。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -85,9 +87,9 @@ synthesis
 
 save/reloadの永続化境界に加えて、**reload後に`<w0>` + Assist Effect設定からCorrectionを再解決し、fresh Pronounce/WAVへ補正を再適用するE2E経路**も確認済みです。生成済み`Pronounce`はdurable stateではなく、再構築可能なruntime stateとして扱います。
 
-Undo/Redoの履歴semanticsも実ホストで成立しました。残る取得境界として、製品コードがcurrent `UndoRedoManager` をreflectionなしで受け取るPlugin API経路を確定させる必要があります。
+Undo/Redoの履歴semanticsに加えて、current `UndoRedoManager` をpublic `TimelineToolInfo.UndoRedoManager` から受け取る製品向け経路も実ホストで成立しました。
 
-現在の大きな技術課題は、**Undo managerのpublic取得経路とプレビュー/audio cache更新を閉じ、製品Controllerのtrigger/debounceを実装へ落とすこと**です。
+現在の大きな技術課題は、**プレビュー/audio cache更新を閉じ、製品Controllerのtrigger/debounceを実装へ落とすこと**です。
 
 ## Documents
 
