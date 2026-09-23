@@ -331,6 +331,31 @@ same corrected WAV
 
 製品Controllerはこの状態遷移をdebounce/coalesceして実行すればよく、Effect無効化・削除時に補正済み音声を残し続ける設計にはしません。
 
+## 5.6 Proven audio/cache refresh boundary
+
+Lab PR #135で、補正後に実VoiceItemが参照する音声とcache stateをpublic surfaceだけで整合させられることを確認済みです。
+
+```text
+corrected public synthesis
+        ↓
+VoiceItem.FilePath を corrected WAV へ置換
+        ↓
+VoiceItem.ClearVoiceCache()
+        └─ public VoiceCache : byte[] -> null
+        ↓
+VoiceItem.Pronounce = regenerated Pronounce
+        ↓
+normal VoiceItem / Timeline notifications
+```
+
+検証ではbaseline WAVとcorrected WAVを別内容にし、SHA256が異なることを確認した上で、5-byteのstale `VoiceCache` sentinelをpublic setterで投入しました。`ClearVoiceCache()`後はcacheがnullとなり、corrected WAVのSHA256は変化しませんでした。
+
+VoiceItemでは`VoiceCache` / `Pronounce`のPropertyChanged、Timelineではpublic `CurrentFrame`変更時の`PropertyChanged("CurrentFrame")`を確認しています。
+
+Plugin-facing surfaceのrefresh/redraw名走査で得られたのは `Timeline.RefreshTimelineLengthAndMaxLayer()` で、これはpreview/audio redraw用APIではありません。製品側は専用の非公開redraw hookを追加せず、上記のsupported state pathを使います。
+
+GitHub-hosted CIは物理スピーカーからの知覚音声を証明しないため、補正直後の実機プレビュー聴取はhands-on acceptanceとして扱えますが、host integration routeのブロッカーにはしません。
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
