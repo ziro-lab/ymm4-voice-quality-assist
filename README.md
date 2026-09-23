@@ -49,6 +49,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   修正済みVOICEVOX AudioQueryをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`へ渡し、`/audio_query`再解析なしで`/synthesis`・WAV生成まで完走することを実通信で確認。
 - [PR #128](https://github.com/ziro-lab/chat-native-work-lab-001/pull/128)  
   実Timeline上のVoiceItemで通常生成→Pronounce取得→pause補正→同じ`VoiceItem.FilePath`へのpublic再合成→cache無効化→Pronounce保持までE2E確認。
+- [PR #131](https://github.com/ziro-lab/chat-native-work-lab-001/pull/131)  
+  実プロジェクトsave/reloadで`<w0>`・Hatsuon・Assist Effect・Effect設定/有効状態が復元されることを確認。一方、`VoiceItem.Pronounce`は保存されないため、reload後は宣言的な補正情報から再構築する。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -75,7 +77,9 @@ synthesis
 
 補正済みPronounceをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`から再解析なしでVOICEVOX `/synthesis`へ渡し、さらに**実VoiceItemが所有する音声ファイルへ補正済み音声を再合成して戻すE2E経路まで実ホスト検証済み**です。
 
-現在の大きな技術課題は、**Undo/Redo・save/reload・プレビューcache更新・Assist Effect無効化/削除までライフサイクルを閉じること**です。
+save/reloadの永続化境界も確認済みで、**`Pronounce`そのものではなく`<w0>`とAssist Effect設定を永続化し、reload後にPronounce/WAVを再構築する**方針が確定しました。
+
+現在の大きな技術課題は、**Undo/Redo・reload直後の自動再適用・プレビューcache更新・Assist Effect無効化/削除までライフサイクルを閉じること**です。
 
 ## Documents
 
