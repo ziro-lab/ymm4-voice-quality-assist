@@ -27,7 +27,7 @@
 
 - [ ] current UndoRedoManagerのproduct-grade public取得経路
 - [ ] preview/audio cache更新の実機挙動
-- [ ] Effect disable/remove時の挙動
+- [x] Effect disable/remove時のbaseline復元 / re-enable再適用
 
 ### A1. Zero-pause boundary MVP
 
