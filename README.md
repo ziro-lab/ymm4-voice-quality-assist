@@ -46,7 +46,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 - [PR #123](https://github.com/ziro-lab/chat-native-work-lab-001/pull/123)  
   YMM4公式文字制御タグ`<w0>`を、字幕に表示されない境界マーカーとして利用可能。公式`ControlTagParser`からclean textとclean-text上の境界位置も取得可能。
 - [PR #125](https://github.com/ziro-lab/chat-native-work-lab-001/pull/125)  
-  修正済みVOICEVOX AudioQueryが`/audio_query`で再解析されず、そのまま`/synthesis`へ送られることを実通信で確認。
+  修正済みVOICEVOX AudioQueryをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`へ渡し、`/audio_query`再解析なしで`/synthesis`・WAV生成まで完走することを実通信で確認。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -71,7 +71,7 @@ deterministic correction
 synthesis
 ```
 
-残っている大きな技術課題は、**通常の製品プラグインから、private/internal APIへ直接依存せずにYMM4のVOICEVOX合成経路へ入る方法を確定すること**です。
+補正済みPronounceをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`から再解析なしでVOICEVOX `/synthesis`へ渡せるところまで実ホスト検証済みです。次の大きな技術課題は、**実VoiceItem上で生成→補正→再生成を一連で通し、Undo/Redo・save/reload・Effect無効化までライフサイクルを閉じること**です。
 
 ## Documents
 
