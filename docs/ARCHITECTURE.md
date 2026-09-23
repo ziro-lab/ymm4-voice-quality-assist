@@ -225,7 +225,48 @@ public synthesis
 VoiceItem.FilePath
 ```
 
-これによりVOICEVOX側の再解析結果やYMM4の一時Pronounce objectへ永続性を依存しません。reload直後の自動再適用タイミングは別lifecycle sliceで確定します。
+これによりVOICEVOX側の再解析結果やYMM4の一時Pronounce objectへ永続性を依存しません。
+
+### 5.3.1 Proven reload reapply route
+
+Lab PR #132で、PR #131のdurable persistence boundaryから実際にCorrectionを再構築してVoiceItemへ戻す経路を確認済みです。
+
+```text
+reloaded VoiceItem
+  │
+  ├─ Serif / <w0>
+  ├─ Hatsuon
+  └─ Assist Effect/settings
+        │
+        ▼
+controller reapply condition
+        │
+        ▼
+fresh IVoiceSpeaker.CreateVoiceAsync(..., pronounce:null, ...)
+        │
+        └─ fresh Pronounce / AudioQuery
+                 pause = 0.25
+        │
+        ▼
+Correction re-resolution
+        │
+        └─ target pause = 0.0
+        │
+        ▼
+IVoiceSpeaker.CreateVoiceAsync(..., corrected Pronounce, ..., VoiceItem.FilePath)
+        │
+        ▼
+ClearVoiceCache()
+        │
+        ▼
+VoiceItem.Pronounce = regenerated Pronounce
+```
+
+最終補正synthesisではfresh analysis後のPronounceが再解析されず、target pause `0.0`を保持したままWAVへ反映されました。
+
+このLabではfake VOICEVOX provider自体のproject persistenceは検証対象から分離しています。実製品でのvoice provider永続化はYMM4/各provider側の責務であり、Voice Quality Assistが永続化するsource of truthはCorrection marker / Effect設定です。
+
+残るController課題は「reloadやitem rebindingをどのpublic lifecycle signalで検知してこのreapplyを起動するか」であり、Correctionの再解決・合成可能性そのものは閉じています。
 
 ## 5.4 Proven Undo / Redo apply unit
 
