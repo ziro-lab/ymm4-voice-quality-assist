@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema",
+    "exportSessionId",
     "corrections"
   ],
   "properties": {
@@ -17,6 +18,10 @@
       "items": {
         "$ref": "#/$defs/correction"
       }
+    },
+    "exportSessionId": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "$defs": {
@@ -172,19 +177,17 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "exportRef",
             "exportIndex"
           ],
           "properties": {
-            "itemGuid": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "uuid"
-            },
             "exportIndex": {
               "type": "integer",
               "minimum": 0
+            },
+            "exportRef": {
+              "type": "string",
+              "pattern": "^voice-[0-9]{6}$"
             }
           }
         },
