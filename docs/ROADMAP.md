@@ -4,7 +4,7 @@
 
 ## Track A — Local Pronunciation Assist
 
-### A0. Host route closure — IN PROGRESS
+### A0. Host route closure — PUBLIC ROUTE PROVEN / LIFECYCLE IN PROGRESS
 
 目的: private/internal APIへ製品が直接依存せず、補正済みPronounceを通常のYMM4合成経路へ流す。
 
@@ -20,7 +20,7 @@
 
 残:
 
-- [ ] 通常Pluginから使うsupported synthesis routeを確定
+- [x] public `IVoiceSpeaker.CreateVoiceAsync` synthesis routeを実通信で確認
 - [ ] 実VoiceItemで生成→補正→再生成を通す
 - [ ] Undo/Redo方針
 - [ ] save/reload persistence
