@@ -47,6 +47,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   YMM4公式文字制御タグ`<w0>`を、字幕に表示されない境界マーカーとして利用可能。公式`ControlTagParser`からclean textとclean-text上の境界位置も取得可能。
 - [PR #125](https://github.com/ziro-lab/chat-native-work-lab-001/pull/125)  
   修正済みVOICEVOX AudioQueryをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`へ渡し、`/audio_query`再解析なしで`/synthesis`・WAV生成まで完走することを実通信で確認。
+- [PR #128](https://github.com/ziro-lab/chat-native-work-lab-001/pull/128)  
+  実Timeline上のVoiceItemで通常生成→Pronounce取得→pause補正→同じ`VoiceItem.FilePath`へのpublic再合成→cache無効化→Pronounce保持までE2E確認。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -71,7 +73,9 @@ deterministic correction
 synthesis
 ```
 
-補正済みPronounceをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`から再解析なしでVOICEVOX `/synthesis`へ渡せるところまで実ホスト検証済みです。次の大きな技術課題は、**実VoiceItem上で生成→補正→再生成を一連で通し、Undo/Redo・save/reload・Effect無効化までライフサイクルを閉じること**です。
+補正済みPronounceをpublic `IVoiceSpeaker.CreateVoiceAsync(...)`から再解析なしでVOICEVOX `/synthesis`へ渡し、さらに**実VoiceItemが所有する音声ファイルへ補正済み音声を再合成して戻すE2E経路まで実ホスト検証済み**です。
+
+現在の大きな技術課題は、**Undo/Redo・save/reload・プレビューcache更新・Assist Effect無効化/削除までライフサイクルを閉じること**です。
 
 ## Documents
 
