@@ -11,6 +11,7 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 | [PR #117 — Jimaku effect key](https://github.com/ziro-lab/chat-native-work-lab-001/pull/117) | `JimakuVideoEffects`へ独自Effectを保持し、type + `IsEnabled`でopt-in判定可能。 | save/reload・copy時の最終製品挙動 |
 | [PR #118 — VoiceItem observer](https://github.com/ziro-lab/chat-native-work-lab-001/pull/118) | Serif / Hatsuon / JimakuVideoEffects / Effect.IsEnabledの変更通知取得。 | 製品Controllerの寿命管理 |
 | [PR #123 — Official control-tag bridge](https://github.com/ziro-lab/chat-native-work-lab-001/pull/123) | `<w0>`は字幕上で幅を持たず非表示。Serifには残る。public `ControlTagParser`からclean textとTimingTag位置取得。複数marker位置も確認。 | 実VOICEVOX voice providerを使ったSerif→Hatsuon全経路 |
+| [PR #127 — Voice Review item identity](https://github.com/ziro-lab/chat-native-work-lab-001/pull/127) | VoiceItemにはpublic Guid/Id surfaceがなく、standalone serializationにもGuidなし。Timeline上ではlive object参照を保持。 | cross-session再解決アルゴリズムの最終実装 |
 | [PR #125 — Modified AudioQuery synthesis](https://github.com/ziro-lab/chat-native-work-lab-001/pull/125) | 補正済みAudioQueryの`pause_mora.vowel_length=0`が`/audio_query`再呼出しなしで`/synthesis`へ到達。 | 製品が使うsupported/public host route |
 
 ## Current evidence chain
@@ -41,7 +42,7 @@ modified AudioQuery
 /synthesis without /audio_query re-analysis
 ```
 
-残る主な接続点は、**通常の製品プラグインがこの合成経路をどう呼ぶか**です。
+残る主な接続点は、**通常の製品プラグインがこの合成経路をどう呼ぶか**です。Voice Review側のv0 identityは、Guidではなくsession ref + fingerprint再解決を採用します。
 
 ## Evidence labels
 
