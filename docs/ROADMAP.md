@@ -4,7 +4,7 @@
 
 ## Track A — Local Pronunciation Assist
 
-### A0. Host route closure — CORE ROUTE / PERSISTENCE / REAPPLY PROVEN
+### A0. Host route closure — CLOSED
 
 目的: private/internal APIへ製品が直接依存せず、補正済みPronounceを通常のYMM4合成経路へ流す。
 
@@ -23,11 +23,15 @@
 - [x] save/reload persistence境界（`<w0>` / Hatsuon / Assist Effect / 設定は復元、`Pronounce`は非永続）
 - [x] reload後のCorrection再解決→fresh Pronounce/WAV再生成
 
-残:
+済（lifecycle / refresh）:
 
 - [x] current UndoRedoManagerのproduct-grade public取得経路（`TimelineToolInfo.UndoRedoManager`）
-- [ ] preview/audio cache更新の実機挙動
+- [x] audio/cache更新の実機挙動（WAV置換 + `ClearVoiceCache()` + Pronounce再装着 + host state通知）
 - [x] Effect disable/remove時のbaseline復元 / re-enable再適用
+
+非ブロッキングのhands-on acceptance:
+
+- [ ] 実機スピーカーで補正直後のプレビュー音声を知覚確認（CIでは物理音声出力を証明しない）
 
 ### A1. Zero-pause boundary MVP
 
