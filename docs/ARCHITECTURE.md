@@ -152,6 +152,39 @@ WAV
 
 製品側はinternal `VOICEVOXEngine.CreateVoiceFileAsync`を直接呼ぶ設計にしません。
 
+## 5.2 Proven real VoiceItem apply route
+
+Lab PR #128で、上記public speaker経路を実Timeline上の`VoiceItem`へ接続できることを確認済みです。
+
+```text
+real VoiceItem
+   │
+   ├─ Character.Voice.Speaker
+   ├─ VoiceParameter
+   └─ FilePath
+        │
+        ▼
+public IVoiceSpeaker.CreateVoiceAsync
+        │
+        ├─ pronounce == null
+        │    └─ baseline Pronounce / AudioQueryを取得
+        │
+        └─ pronounce == corrected Pronounce
+             └─ 再解析なしでVoiceItem.FilePathへ再合成
+        │
+        ▼
+VoiceItem.ClearVoiceCache()
+        │
+        ▼
+VoiceItem.Pronounce = regenerated Pronounce
+```
+
+重要なのは、`VoiceItem.CreateVoiceFileAsync()`単体が編集用`Pronounce`を保持してくれることを前提にしない点です。Local Assist側Controllerがpublic `IVoiceSpeaker.CreateVoiceAsync(...)`の戻り値を保持し、Correctionを適用したPronounceを明示的にVoiceItemへ戻します。
+
+PR #128の検証では、target PauseMoraを`0.25 -> 0.0`へ変更した後、同じ実VoiceItemの音声ファイルへ再合成でき、最終`/synthesis`前に新しい`/audio_query`は発生しませんでした。
+
+Undo/Redo・save/reload・interactive preview cache・Effect disable/removeは、このapply routeとは別のlifecycle境界として検証します。
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
