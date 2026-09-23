@@ -1,0 +1,43 @@
+{
+  "schema": "ymm4.voice-review.v0",
+  "exportedAt": "2026-09-23T21:00:00+09:00",
+  "project": {
+    "name": "example-project",
+    "sourceHint": null
+  },
+  "voices": [
+    {
+      "target": {
+        "itemGuid": "11111111-1111-1111-1111-111111111111",
+        "exportIndex": 0,
+        "frame": 120,
+        "layer": 1
+      },
+      "sourceFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "characterName": "小夜",
+      "speaker": null,
+      "serif": "このあと<w0>ゲートを抜けます",
+      "hatsuon": "このあとげーとをぬけます",
+      "context": {
+        "previous": null,
+        "next": {
+          "characterName": "ミコ",
+          "serif": "了解です"
+        }
+      },
+      "controls": {
+        "cleanText": "このあとゲートを抜けます",
+        "boundaries": [
+          {
+            "position": 4,
+            "source": "w0"
+          }
+        ]
+      },
+      "assist": {
+        "enabled": true
+      },
+      "pronunciationSummary": null
+    }
+  ]
+}
