@@ -1,9 +1,10 @@
 {
   "schema": "ymm4.voice-corrections.v0",
+  "exportSessionId": "session-20260923-example",
   "corrections": [
     {
       "target": {
-        "itemGuid": "11111111-1111-1111-1111-111111111111",
+        "exportRef": "voice-000000",
         "exportIndex": 0
       },
       "expectedSourceFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
