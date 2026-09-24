@@ -4,9 +4,8 @@ using System.Windows;
 using System.Windows.Threading;
 using Ymm4VoiceQualityAssist.Core;
 using Ymm4VoiceQualityAssist.Effects;
-using YukkuriMovieMaker.Project;
 using YukkuriMovieMaker.Project.Items;
-using YukkuriMovieMaker.UndoRedo;
+using YukkuriMovieMaker.ViewModels;
 
 namespace Ymm4VoiceQualityAssist.Runtime;
 
@@ -30,8 +29,7 @@ public sealed class PronunciationAssistController : IDisposable
         "FilePath",
     ];
 
-    readonly Timeline timeline;
-    readonly UndoRedoManager undoRedoManager;
+    readonly TimelineViewModel timelineViewModel;
     readonly ZeroPauseApplyService service;
     readonly Dispatcher dispatcher;
     readonly DispatcherTimer rescanTimer;
@@ -42,14 +40,11 @@ public sealed class PronunciationAssistController : IDisposable
     bool scanRunning;
 
     public PronunciationAssistController(
-        Timeline timeline,
-        UndoRedoManager undoRedoManager,
+        TimelineViewModel timelineViewModel,
         ZeroPauseApplyService? service = null)
     {
-        this.timeline = timeline
-            ?? throw new ArgumentNullException(nameof(timeline));
-        this.undoRedoManager = undoRedoManager
-            ?? throw new ArgumentNullException(nameof(undoRedoManager));
+        this.timelineViewModel = timelineViewModel
+            ?? throw new ArgumentNullException(nameof(timelineViewModel));
         this.service = service ?? new ZeroPauseApplyService();
 
         dispatcher = Application.Current?.Dispatcher
@@ -67,16 +62,21 @@ public sealed class PronunciationAssistController : IDisposable
             _ = ReconcileAllAsync();
         };
 
-        undoRedoManager.Recorded += OnHistoryChanged;
-        undoRedoManager.Undoed += OnHistoryChanged;
-        undoRedoManager.Redoed += OnHistoryChanged;
-        timeline.UndoRedoCommandCreated += OnTimelineEdited;
+        timelineViewModel.PropertyChanged += OnTimelineViewModelPropertyChanged;
 
         QueueScan();
     }
 
-    void OnHistoryChanged(object? sender, EventArgs e) => QueueScan();
-    void OnTimelineEdited(object? sender, UndoRedoEventArgs e) => QueueScan();
+    void OnTimelineViewModelPropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || e.PropertyName == nameof(TimelineViewModel.Items))
+        {
+            QueueScan();
+        }
+    }
 
     void QueueScan()
     {
@@ -124,7 +124,8 @@ public sealed class PronunciationAssistController : IDisposable
         IEqualityComparer<VoiceItem> comparer =
             ReferenceEqualityComparer.Instance;
 
-        var current = timeline.Items
+        var current = timelineViewModel.Items
+            .Select(x => x.Item)
             .OfType<VoiceItem>()
             .ToHashSet(comparer);
 
@@ -308,10 +309,7 @@ public sealed class PronunciationAssistController : IDisposable
         disposed = true;
         rescanTimer.Stop();
 
-        undoRedoManager.Recorded -= OnHistoryChanged;
-        undoRedoManager.Undoed -= OnHistoryChanged;
-        undoRedoManager.Redoed -= OnHistoryChanged;
-        timeline.UndoRedoCommandCreated -= OnTimelineEdited;
+        timelineViewModel.PropertyChanged -= OnTimelineViewModelPropertyChanged;
 
         foreach (var state in states.Values)
             state.Dispose();
