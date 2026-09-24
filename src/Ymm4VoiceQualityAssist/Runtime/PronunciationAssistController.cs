@@ -22,6 +22,7 @@ public sealed class PronunciationAssistController : IDisposable
         nameof(VoiceItem.Serif),
         nameof(VoiceItem.Hatsuon),
         nameof(VoiceItem.JimakuVideoEffects),
+        nameof(VoiceItem.AudioEffects),
         nameof(VoiceItem.Pronounce),
         nameof(VoiceItem.VoiceParameter),
         "Character",
@@ -190,8 +191,11 @@ public sealed class PronunciationAssistController : IDisposable
             state.SourceRevision++;
             if (propertyName == nameof(VoiceItem.VoiceParameter))
                 state.RefreshParameterSubscription();
-            if (propertyName == nameof(VoiceItem.JimakuVideoEffects))
+            if (propertyName is nameof(VoiceItem.JimakuVideoEffects)
+                or nameof(VoiceItem.AudioEffects))
+            {
                 state.RefreshEffectSubscriptions();
+            }
 
             QueueScan();
         }
@@ -205,9 +209,9 @@ public sealed class PronunciationAssistController : IDisposable
         if (disposed) return;
 
         if (string.IsNullOrEmpty(propertyName)
-            || propertyName == nameof(PronunciationAssistEffect.IsEnabled)
-            || propertyName == nameof(PronunciationAssistEffect.HelperRulesJson)
-            || propertyName == nameof(PronunciationAssistEffect.Prosody))
+            || propertyName == nameof(IPronunciationAssistSettings.IsEnabled)
+            || propertyName == nameof(IPronunciationAssistSettings.HelperRulesJson)
+            || propertyName == nameof(IPronunciationAssistSettings.Prosody))
         {
             state.SourceRevision++;
             QueueScan();
@@ -347,7 +351,8 @@ public sealed class PronunciationAssistController : IDisposable
 
         var helperConfiguration = string.Join(
             "\u001e",
-            EnumerateAssistEffects(voice)
+            ReviewAssistEffectCollection
+                .Enumerate(voice)
                 .Select(x =>
                     $"{x.IsEnabled}:{x.HelperRulesJson}:{x.Prosody}"));
 
@@ -360,22 +365,6 @@ public sealed class PronunciationAssistController : IDisposable
             helperConfiguration,
             RuntimeHelpers.GetHashCode(
                 (object?)voice.VoiceParameter ?? voice));
-    }
-
-    static IEnumerable<PronunciationAssistEffect> EnumerateAssistEffects(
-        VoiceItem voice)
-    {
-        if (voice.JimakuVideoEffects
-            is not System.Collections.IEnumerable effects)
-        {
-            yield break;
-        }
-
-        foreach (var value in effects)
-        {
-            if (value is PronunciationAssistEffect effect)
-                yield return effect;
-        }
     }
 
     public void Dispose()
@@ -484,17 +473,11 @@ public sealed class PronunciationAssistController : IDisposable
             voiceChanged(voice, this, nameof(VoiceItem.VoiceParameter));
         }
 
-        static IEnumerable<object> EnumerateEffects(VoiceItem voice)
-        {
-            if (voice.JimakuVideoEffects is not System.Collections.IEnumerable effects)
-                yield break;
-
-            foreach (var item in effects)
-            {
-                if (item is not null)
-                    yield return item;
-            }
-        }
+        static IEnumerable<object> EnumerateEffects(
+            VoiceItem voice) =>
+            ReviewAssistEffectCollection
+                .Enumerate(voice)
+                .Cast<object>();
 
         public void Dispose()
         {
