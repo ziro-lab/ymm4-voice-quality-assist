@@ -122,12 +122,60 @@ B0 coreでfreeze済み:
 - conflicting/duplicate correctionの拒否
 - `noChange`混在拒否
 
-B3で実装するUI/apply境界:
+B3製品実装で閉じたUI/apply境界:
 
+- same-sessionは `exportRef -> live VoiceItem`、cross-sessionはfingerprint + locatorで再解決
+- `EXACT_SESSION / EXACT_FINGERPRINT / STALE / MISSING / AMBIGUOUS` を明示
 - before/after diff表示
+- EXACTだけチェック可能
 - 選択したCorrectionだけ適用
+- rejected / stale / missing / ambiguous proposalを変更しない
+- apply直前にもfingerprintを再確認
+- batch preflightで1件でも失敗すれば全体未変更
+- literal `<w0>` 以外のofficial control tagがSerifに混在するboundary editはfail closed
+- helperとboundaryの同位置衝突を拒否
+- durable Serif/Hatsuon/Assist Effectだけをjournal化
+- YMM4の `UndoRedoActionCommand + AddCommand + Record` へ1つのUndo単位として登録
+- Undo/Redo後のPronounce/WAVはTrack A runtimeが再生成
 - free-form codeを実行しない
-- 可能なら一つのUndo単位へまとめる
+
+実YMM4 4.56.1.0のB3 native acceptanceでは、STALE拒否、EXACT apply、A1/A2/A3複合再生成、Undo baseline復元、Redo同一corrected WAV復元までGREEN。
+
+
+### B3 import lifecycle — PRODUCT NATIVE GREEN
+
+```text
+B1 Export Package + B2 Correction JSON
+        ↓
+wire / source validation
+        ↓
+current Timeline re-resolution
+        ├─ EXACT_SESSION
+        ├─ EXACT_FINGERPRINT
+        ├─ STALE
+        ├─ MISSING
+        └─ AMBIGUOUS
+        ↓
+before / after preview
+        ↓
+user selection (EXACT only)
+        ↓
+whole-batch preflight
+        ↓
+atomic durable source journal
+        ↓
+YMM4 UndoRedoActionCommand / Record
+        ↓
+Track A automatic regeneration
+        ↓
+Undo / Redo → baseline / corrected regeneration
+```
+
+same-sessionで元export object mapが残っている場合は、timeline上のframe/layer移動だけではidentityを失いません。ただしsourceFingerprintが変わっていればSTALEです。cross-sessionではB0の厳格resolverを使い、複数exact fingerprintはlocatorで勝手に絞りません。
+
+B3 v0のboundary rewriteはsource破壊を避けるため、Serif中のofficial control tagがliteral `<w0>` だけの場合に限定します。`<w100>` 等の別official tagが混ざる場合は自動rewriteしません。
+
+Native chain: run `35993465363`, artifact `10805292609`.
 
 ## 8. Human-readable formats — B1
 
