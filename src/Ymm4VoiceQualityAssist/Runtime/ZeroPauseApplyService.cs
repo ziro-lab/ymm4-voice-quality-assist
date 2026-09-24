@@ -167,7 +167,7 @@ public sealed class ZeroPauseApplyService
                 AssistApplyStatus.NoMarkers,
                 0,
                 null,
-                "No zero-pause markers, helper-mora rules, or prosody gesture were found.");
+                "No forced-boundary markers, helper-mora rules, or prosody gesture were found.");
         }
 
         if (!TryResolveVoiceContext(
@@ -231,6 +231,35 @@ public sealed class ZeroPauseApplyService
 
             helperPlan = helperPlanResult.Plan;
             synthesisText = helperPlan.AugmentedReading;
+        }
+
+        ForcedBoundaryAnalysisPlan? forcedBoundaryPlan = null;
+
+        if (hasMarkers)
+        {
+            var forcedPlanResult =
+                await ForcedBoundaryReadingPlanner.ResolveAsync(
+                    speaker!,
+                    parameter!,
+                    markerSource,
+                    hatsuon,
+                    helperPlan);
+
+            if (!lease.IsCurrent) return Superseded();
+
+            if (!forcedPlanResult.IsSuccess
+                || forcedPlanResult.Plan is null)
+            {
+                return new AssistApplyResult(
+                    AssistApplyStatus.ResolutionFailed,
+                    0,
+                    forcedPlanResult.Status,
+                    forcedPlanResult.Message
+                        ?? "Forced-boundary analysis plan could not be resolved.");
+            }
+
+            forcedBoundaryPlan = forcedPlanResult.Plan;
+            synthesisText = forcedBoundaryPlan.TransientReading;
         }
 
         var analysisPath = CreateTempWavePath();
@@ -303,23 +332,11 @@ public sealed class ZeroPauseApplyService
                 mutatedCount += helperMutation.MutatedMoraCount;
             }
 
-            if (hasMarkers)
+            if (forcedBoundaryPlan is not null)
             {
-                var resolution = helperPlan is null
-                    ? await SameSpeakerBoundaryResolver.ResolveAsync(
-                        speaker!,
-                        parameter!,
-                        markerSource,
-                        hatsuon,
-                        freshPronounce)
-                    : await AugmentedZeroPauseBoundaryResolver.ResolveAsync(
-                        speaker!,
-                        parameter!,
-                        markerSource,
-                        helperPlan,
-                        freshPronounce);
-
-                if (!lease.IsCurrent) return Superseded();
+                var resolution = InjectedPauseResolver.Resolve(
+                    forcedBoundaryPlan,
+                    projection);
 
                 if (!resolution.IsSuccess)
                 {
@@ -330,7 +347,10 @@ public sealed class ZeroPauseApplyService
                         resolution.Message);
                 }
 
-                var mutation = ZeroPauseMutator.Apply(
+                // Only boundaries planned as plugin-injected transient commas
+                // are eligible for mutation. Source punctuation is never
+                // enumerated as a correction target.
+                var mutation = ForcedBoundaryMutator.Apply(
                     projection,
                     resolution);
 

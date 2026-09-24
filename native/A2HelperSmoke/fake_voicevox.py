@@ -60,7 +60,7 @@ def pause():
     }
 
 def phrases_for(text):
-    if text == "エエウエ":
+    if text == "エ、エウエ":
         return [
             {
                 "moras": [mora("エ")],

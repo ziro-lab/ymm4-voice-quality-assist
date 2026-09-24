@@ -114,6 +114,37 @@ try {
       }
     }
 
+    if(-not(Test-Path $requests)){
+      throw 'Fake VOICEVOX request log missing'
+    }
+
+    $requestRows=@(Get-Content $requests|ForEach-Object {$_|ConvertFrom-Json})
+    $baselineAnalysis=@($requestRows|Where-Object {
+      $_.method-eq'POST' -and
+      $_.path-eq'/accent_phrases' -and
+      $_.query.text[0]-eq'トウキョウダイガク'
+    })
+    $forcedAnalysis=@($requestRows|Where-Object {
+      $_.method-eq'POST' -and
+      $_.path-eq'/accent_phrases' -and
+      $_.query.text[0]-eq'トウキョウ、ダイガク'
+    })
+
+    if($baselineAnalysis.Count-lt1){
+      throw 'Baseline reading never reached accent analysis'
+    }
+    if($forcedAnalysis.Count-lt1){
+      throw 'Transient forced-boundary reading never reached accent analysis'
+    }
+
+    @{
+      schema='vqa.a1.vnext-forced-boundary-e2e.v1'
+      baseline_analysis_count=$baselineAnalysis.Count
+      transient_forced_analysis_count=$forcedAnalysis.Count
+      transient_reading='トウキョウ、ダイガク'
+    }|ConvertTo-Json|Set-Content (Join-Path $OutputDir 'vnext-e2e.json')
+
+    Write-Output 'PASS_A1_VNEXT_FORCED_BOUNDARY_E2E'
     Write-Output 'PASS_A1_PRODUCT_NATIVE_SMOKE_E2E'
   }
   finally {
