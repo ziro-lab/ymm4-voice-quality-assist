@@ -51,8 +51,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out/probe|Out-Null
-          $productDir=(Resolve-Path out/product).Path + '\'
-          dotnet build native/A1Smoke/src/Probe/Probe.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" "-p:ProductDir=$productDir" -o out/probe --nologo -warnaserror
+          dotnet build native/A1Smoke/src/Probe/Probe.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" -o out/probe --nologo -warnaserror
           if($LASTEXITCODE-ne0){throw 'Native probe build failed'}
 
       - name: Run real YMM4 product lifecycle
