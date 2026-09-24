@@ -1,6 +1,6 @@
 # Review Bridge schema v0
 
-Status: **DRAFT overall / B0 identity+validation, B1 export, and B2 correction wire FROZEN**
+Status: **v0 workflow FROZEN through B3 import/apply**
 
 この文書はVoice Review Bridgeの最初の交換形式を具体化します。
 
@@ -245,7 +245,103 @@ boundaryはA1仕様に合わせてclean textの**interior**のみ。helperはA2�
 
 before/after diff生成、JSON wire parsing、実YMM4 mutation、Undo単位化はB1/B3側です。
 
-## 8. JSON / human-readable split — B1 FROZEN
+## 8. Import planning / apply — B3 FROZEN
+
+B3はB2でvalidatedなcorrection packageだけを受け取る。
+
+### Resolution
+
+same-session:
+
+1. `exportSessionId + exportRef` からlive VoiceItemを取得
+2. current fingerprintがexport時fingerprintと一致 → `EXACT_SESSION_MATCH`
+3. sourceが変わった → `STALE`
+
+cross-session:
+
+- B0 resolverを使用
+- exactly one fingerprint match → `EXACT_FINGERPRINT_MATCH`
+- unique locator only → `STALE`
+- none → `MISSING`
+- multiple → `AMBIGUOUS`
+
+apply可能なのはEXACT 2種のみ。
+
+### Preview
+
+mutation前に各itemへ以下を生成する。
+
+- Hatsuon before / after
+- `<w0>` boundary before / after
+- helper additions
+- proposed prosody
+- noChange state
+- resolution state / message
+
+### Selection
+
+- EXACTだけ選択可能
+- noChangeは初期非選択
+- select-allはapply可能itemだけ
+- STALE / MISSING / AMBIGUOUSは選択不可
+
+### Preflight
+
+選択itemを1件ずつcommitするのではなく、batch全体を先に検証する。
+
+- apply直前fingerprint一致
+- boundary rewrite safety
+- helper anchor再解決
+- helper / boundary collision
+- enabled Assist helper JSON validity
+- selected itemがEXACTであること
+
+1件でも失敗すればbatch全体を変更しない。
+
+### Boundary rewrite safety
+
+B3 v0は、official control tagを除いたplain textが
+
+```text
+Serif.Replace("<w0>", "")
+```
+
+と完全一致する場合だけSerifをrebuildする。
+
+つまり自動rewrite可能なのは通常text + literal `<w0>` だけ。`<w100>` 等ほかのofficial control tagが混在する場合はfail closedする。
+
+UTF-16 surrogate pairの途中へboundaryを置かない。
+
+### Durable apply
+
+journalが変更するsource of truth:
+
+- Serif
+- Hatsuon
+- Voice Quality Assist Effect membership
+- Effect.IsEnabled
+- HelperRulesJson
+- Prosody
+
+generated Pronounce / WAVはjournal snapshotへ保存しない。Track A runtimeのderived stateとして再生成する。
+
+### Undo / Redo
+
+選択batchはYMM4 public
+
+```text
+UndoRedoActionCommand
+UndoRedoManager.AddCommand(...)
+UndoRedoManager.Record()
+```
+
+へ1 recordとして登録する。
+
+Undo / Redoはdurable source snapshotを往復し、その後Track A runtimeがPronounce / WAVを再生成する。
+
+Product-native run `35993465363` で Recorded=1 / Undoed=1 / Redoed=1、baseline/corrected audio roundtripまで確認済み。
+
+## 9. JSON / human-readable split — B1 FROZEN
 
 canonicalはJSON。
 
