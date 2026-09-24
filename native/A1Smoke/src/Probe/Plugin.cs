@@ -237,7 +237,9 @@ internal static class Probe
 
             var effect = CreateProductAssistEffect();
             Check("product_effect_type_discovered", effect is not null);
-            AppendEffect(voice, effect!);
+            if (effect is null)
+                throw new InvalidOperationException("Product Assist Effect type was not discovered.");
+            AppendEffect(voice, effect);
 
             await WaitUntil(
                 "initial correction",
