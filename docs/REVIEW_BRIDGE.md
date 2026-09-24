@@ -69,9 +69,9 @@ Lab結果から、YMM4 4.56.1.0のVoiceItemにはPlugin APIから読める安定
 
 ### Cross session
 
-`sourceFingerprint`を第一条件にし、frame/layer/character/contextは候補絞り込み用locatorとして使います。
+`sourceFingerprint`を第一条件にします。exact fingerprintが**1件だけ**ならauto-apply candidateです。複数exact matchはlocatorで勝手に絞らず `AMBIGUOUS` とします。
 
-一意に解決できない場合は `AMBIGUOUS` とし、自動適用しません。
+exact matchが0件の場合だけframe/layer/character/previous/next contextをlocatorとして使います。locatorが1件でもfingerprintが違えば `STALE` であり、自動適用しません。
 
 詳細は [SCHEMA_V0.md](SCHEMA_V0.md)。
 
@@ -90,14 +90,23 @@ operation候補:
 
 ## 7. Import safety
 
+B0 coreでfreeze済み:
+
 - schema version検証
 - exportSessionId整合
-- target再解決
-- fingerprint一致確認
+- exportRef存在
+- target再解決state
+- fingerprint format / 一致確認
 - stale/ambiguous proposalを自動適用しない
+- unknown operationをエラー化
+- operation payload / clean-text position検証
+- conflicting/duplicate correctionの拒否
+- `noChange`混在拒否
+
+B3で実装するUI/apply境界:
+
 - before/after diff表示
 - 選択したCorrectionだけ適用
-- 不明operationをエラー化
 - free-form codeを実行しない
 - 可能なら一つのUndo単位へまとめる
 
