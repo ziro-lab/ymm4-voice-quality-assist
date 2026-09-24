@@ -226,7 +226,7 @@ public sealed class ReviewExportTests
             result.Message);
 
         Assert.Equal(
-            ["B", "A"],
+            new string?[] { "B", "A" },
             result.Package!.Voices
                 .Select(x => x.Serif)
                 .ToArray());
