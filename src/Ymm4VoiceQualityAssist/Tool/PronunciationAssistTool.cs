@@ -1,6 +1,12 @@
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
+using Ymm4VoiceQualityAssist.Core;
 using YukkuriMovieMaker.Plugin;
+using YukkuriMovieMaker.Project;
+using YukkuriMovieMaker.Project.Items;
 
 namespace Ymm4VoiceQualityAssist.Tool;
 
@@ -17,25 +23,192 @@ public sealed class PronunciationAssistToolPlugin : IToolPlugin
 
 public sealed class PronunciationAssistToolView : UserControl
 {
+    readonly TextBlock status;
+    readonly Button exportButton;
+
     public PronunciationAssistToolView()
     {
-        Content = new TextBlock
+        var title = new TextBlock
         {
-            Text = "Voice Quality Assist\nバックグラウンド監視は自動で動作します。\n<w0> を含む発音補助アイテムだけを処理します。",
-            Margin = new Thickness(12),
-            TextWrapping = TextWrapping.Wrap,
+            Text = "Voice Quality Assist",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
         };
+
+        var description = new TextBlock
+        {
+            Text =
+                "発音補助のバックグラウンド監視は自動で動作します。\n"
+                + "Voice Review JSONでは、現在のボイス一覧をLLM/手動レビュー用に書き出せます。",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+
+        exportButton = new Button
+        {
+            Content = "Voice Review JSONをエクスポート",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 220,
+        };
+        exportButton.Click += OnExportClick;
+
+        status = new TextBlock
+        {
+            Text = "Timelineを開いた状態でエクスポートできます。",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        Content = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Children =
+            {
+                title,
+                description,
+                exportButton,
+                status,
+            },
+        };
+    }
+
+    async void OnExportClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext
+            is not PronunciationAssistToolViewModel viewModel)
+        {
+            status.Text =
+                "Voice Quality Assistの状態を取得できませんでした。";
+            return;
+        }
+
+        exportButton.IsEnabled = false;
+
+        try
+        {
+            var prepared =
+                viewModel.PrepareReviewExport(
+                    "session-"
+                    + Guid.NewGuid().ToString("N"),
+                    DateTimeOffset.UtcNow);
+
+            if (!prepared.IsSuccess
+                || prepared.Session is null)
+            {
+                status.Text =
+                    prepared.Message
+                    ?? "Voice Review JSONを作成できませんでした。";
+                return;
+            }
+
+            if (prepared.Session.Package.Voices.Count == 0)
+            {
+                status.Text =
+                    "現在のTimelineにVoiceItemがありません。";
+                return;
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Title = "Voice Review JSONを保存",
+                Filter =
+                    "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*",
+                DefaultExt = ".json",
+                AddExtension = true,
+                FileName =
+                    "ymm4-voice-review-"
+                    + DateTime.Now.ToString(
+                        "yyyyMMdd-HHmmss")
+                    + ".json",
+                OverwritePrompt = true,
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                status.Text =
+                    "エクスポートをキャンセルしました。";
+                return;
+            }
+
+            var json =
+                ReviewExportJson.Serialize(
+                    prepared.Session.Package);
+
+            await File.WriteAllTextAsync(
+                dialog.FileName,
+                json,
+                new UTF8Encoding(
+                    encoderShouldEmitUTF8Identifier: false));
+
+            viewModel.CommitReviewExport(
+                prepared.Session);
+
+            status.Text =
+                $"{prepared.Session.Package.Voices.Count}件のVoiceItemを書き出しました。\n"
+                + dialog.FileName;
+        }
+        catch (Exception ex)
+        {
+            status.Text =
+                "エクスポートに失敗しました: "
+                + ex.GetBaseException().Message;
+        }
+        finally
+        {
+            exportButton.IsEnabled = true;
+        }
     }
 }
 
 public sealed class PronunciationAssistToolViewModel :
     ITimelineToolViewModel
 {
-    public void SetTimelineToolInfo(TimelineToolInfo info)
+    Timeline? timeline;
+
+    public ReviewExportSession? LastReviewExportSession
     {
-        // The A1 runtime is started by IPlugin.Initialize and follows
-        // MainViewModel.ActiveTimelineViewModel through public APIs.
-        // The Tool is optional status/help UI and must not create a
-        // second controller.
+        get;
+        private set;
+    }
+
+    public void SetTimelineToolInfo(
+        TimelineToolInfo info)
+    {
+        timeline = info.Timeline;
+    }
+
+    public ReviewExportBuildResult PrepareReviewExport(
+        string exportSessionId,
+        DateTimeOffset exportedAt)
+    {
+        if (timeline is null)
+        {
+            return ReviewExportBuildResult.Failure(
+                ReviewExportBuildStatus.InvalidVoiceSource,
+                null,
+                "Timelineを取得できませんでした。");
+        }
+
+        var voices = timeline.Items
+            .OfType<VoiceItem>()
+            .ToArray();
+
+        return ReviewExportBuilder.Build(
+            voices,
+            exportSessionId,
+            exportedAt);
+    }
+
+    public void CommitReviewExport(
+        ReviewExportSession session)
+    {
+        ArgumentNullException.ThrowIfNull(
+            session);
+
+        LastReviewExportSession =
+            session;
     }
 }
