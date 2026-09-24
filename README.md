@@ -65,6 +65,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   Serifの`<w0>`はControlTagParser上の境界としては取れるが、Serif-only markerはVOICEVOX生成構造を自動分割しないことを確認。Hatsuonへliteral tagを入れる経路も不採用。A1には明示的なsemantic boundary resolverが必要。
 - [PR #137](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137)  
   public `IVoiceSpeaker.ConvertKanjiToYomiAsync`でsame-speaker full/prefix readingを取得し、prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付けられるmechanismを確認。exact match + PauseMora存在時だけ適用するfail-closed resolverを採用可能。
+- [PR #140](https://github.com/ziro-lab/chat-native-work-lab-001/pull/140)  
+  helper kanaをSerif/Hatsuonへ保存せずtransient readingだけへ挿入し、helper vowel=0 / helper consonant=0（母音維持）を実VoiceItem・実`/synthesis`まで確認。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
@@ -107,7 +109,7 @@ Product native chain:
 - artifact `10792103203`
 - SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
 
-次の主作業は **A2 Helper mora**。A1の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
+次の主作業は **A2 Helper moraの製品実装**。transient helper合成機構はLab #140でGREENになったため、version付きhelper rule + safe anchor relocation + save/reload再適用を製品へ落とします。A1の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
 
 ## Documents
 
