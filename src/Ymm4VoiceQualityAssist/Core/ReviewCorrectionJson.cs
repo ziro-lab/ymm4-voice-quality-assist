@@ -389,7 +389,10 @@ public static class ReviewCorrectionJson
         {
             case "setReading":
                 if (operation.Reading is null)
-                    return Invalid("setReading requires reading.");
+                    return InvalidPayload(
+                        out converted,
+                        out error,
+                        "setReading requires reading.");
 
                 converted =
                     new SetReadingCorrection(
@@ -398,7 +401,10 @@ public static class ReviewCorrectionJson
 
             case "addBoundary":
                 if (operation.Position is null)
-                    return Invalid("addBoundary requires position.");
+                    return InvalidPayload(
+                        out converted,
+                        out error,
+                        "addBoundary requires position.");
 
                 converted =
                     new AddBoundaryCorrection(
@@ -407,7 +413,10 @@ public static class ReviewCorrectionJson
 
             case "removeBoundary":
                 if (operation.Position is null)
-                    return Invalid("removeBoundary requires position.");
+                    return InvalidPayload(
+                        out converted,
+                        out error,
+                        "removeBoundary requires position.");
 
                 converted =
                     new RemoveBoundaryCorrection(
@@ -418,7 +427,9 @@ public static class ReviewCorrectionJson
                 if (operation.Position is null
                     || operation.Helper is null)
                 {
-                    return Invalid(
+                    return InvalidPayload(
+                        out converted,
+                        out error,
                         "helperVowelZero requires position and helper.");
                 }
 
@@ -432,7 +443,9 @@ public static class ReviewCorrectionJson
                 if (operation.Position is null
                     || operation.Helper is null)
                 {
-                    return Invalid(
+                    return InvalidPayload(
+                        out converted,
+                        out error,
                         "helperConsonantZero requires position and helper.");
                 }
 
@@ -447,7 +460,9 @@ public static class ReviewCorrectionJson
                     operation.Gesture,
                     out var gesture))
                 {
-                    return Invalid(
+                    return InvalidPayload(
+                        out converted,
+                        out error,
                         "setProsodyGesture requires one of: none, lightRise, lightFall, hold.");
                 }
 
@@ -470,15 +485,19 @@ public static class ReviewCorrectionJson
                 return false;
         }
 
-        bool Invalid(
-            string message)
-        {
-            error =
-                new ReviewCorrectionWireError(
-                    ReviewCorrectionWireErrorCode.InvalidPayload,
-                    message);
-            return false;
-        }
+    }
+
+    static bool InvalidPayload(
+        out ReviewCorrectionOperation? converted,
+        out ReviewCorrectionWireError? error,
+        string message)
+    {
+        converted = null;
+        error =
+            new ReviewCorrectionWireError(
+                ReviewCorrectionWireErrorCode.InvalidPayload,
+                message);
+        return false;
     }
 
     static bool TryParseGesture(
