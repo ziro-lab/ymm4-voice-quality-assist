@@ -53,14 +53,16 @@ Product native evidence:
 - artifact `10792103203`
 - artifact SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
 
-### A2. Helper mora
+### A2. Helper mora — MECHANISM PROVEN / PRODUCT IMPLEMENTATION NEXT
 
-- [ ] hidden/helper authoring representationを決める
-- [ ] helper vowel duration = 0
-- [ ] helper consonant duration = 0
-- [ ] regeneration reapply
-- [ ] subtitle表示との整合
-- [ ] helper位置の安全な再解決
+- [x] helperをSerif/Hatsuonへ永続挿入しない方針（Assist Effect設定 → transient augmented reading）
+- [x] helper vowel duration = 0（Lab #140）
+- [x] helper consonant duration = 0 + helper vowel維持（Lab #140）
+- [x] subtitle/通常Hatsuonを変更せず実VoiceItemへ合成可能（Lab #140）
+- [ ] durable helper rule schema / codec
+- [ ] helper anchorの安全な再解決（source text変更時）
+- [ ] regeneration / save-reload product reapply
+- [ ] A2 product-native smoke
 
 ### A3. Optional prosody assist
 
