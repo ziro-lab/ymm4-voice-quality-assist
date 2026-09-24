@@ -593,6 +593,24 @@ internal static class Probe
                         .Anchor.Position
                         == 2);
 
+                Check(
+                    "assist_new_write_uses_audio_effects",
+                    selected.AudioEffects
+                        .Cast<object>()
+                        .Any(x =>
+                            ReferenceEquals(
+                                x,
+                                effect)));
+
+                Check(
+                    "assist_new_write_skips_legacy_collection",
+                    !selected.JimakuVideoEffects
+                        .Cast<object>()
+                        .Any(x =>
+                            ReferenceEquals(
+                                x,
+                                effect)));
+
                 await WaitUntil(
                     "Track A regeneration after import",
                     () =>
