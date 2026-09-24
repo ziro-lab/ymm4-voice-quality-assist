@@ -294,12 +294,12 @@ public static class ReviewCorrectionValidator
     {
         var adds = operations
             .OfType<AddBoundaryCorrection>()
-            .Select(x => x.Position)
+            .Select(x => x.CleanTextPosition)
             .ToArray();
 
         var removes = operations
             .OfType<RemoveBoundaryCorrection>()
-            .Select(x => x.Position)
+            .Select(x => x.CleanTextPosition)
             .ToArray();
 
         foreach (var position
