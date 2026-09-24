@@ -37,6 +37,26 @@ public static class SourceFingerprint
         out SourceFingerprintResult? result,
         out string? error)
     {
+        if (!TryCreateInput(
+            voice,
+            out var input,
+            out error)
+            || input is null)
+        {
+            result = null;
+            return false;
+        }
+
+        result = Create(input);
+        error = null;
+        return true;
+    }
+
+    public static bool TryCreateInput(
+        VoiceItem voice,
+        out SourceFingerprintInput? input,
+        out string? error)
+    {
         ArgumentNullException.ThrowIfNull(voice);
 
         var profiles =
@@ -61,7 +81,7 @@ public static class SourceFingerprint
                     out var decoded,
                     out var decodeError))
                 {
-                    result = null;
+                    input = null;
                     error =
                         decodeError
                         ?? "Enabled Assist Effect has invalid helper-rule JSON.";
@@ -76,12 +96,16 @@ public static class SourceFingerprint
             }
         }
 
-        result = Create(
-            new SourceFingerprintInput(
-                voice.CharacterName,
-                voice.Serif,
-                voice.Hatsuon,
-                profiles));
+        input = new SourceFingerprintInput(
+            voice.CharacterName,
+            voice.Serif,
+            voice.Hatsuon,
+            profiles
+                .Select(CanonicalizeProfile)
+                .OrderBy(
+                    ProfileSortKey,
+                    StringComparer.Ordinal)
+                .ToArray());
 
         error = null;
         return true;
