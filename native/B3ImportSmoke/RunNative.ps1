@@ -101,6 +101,8 @@ try {
       'import_recorded_once',
       'durable_source_applied',
       'assist_effect_created',
+      'assist_new_write_uses_audio_effects',
+      'assist_new_write_skips_legacy_collection',
       'track_a_regenerated_corrected_audio',
       'stale_voice_not_applied',
       'undo_restores_durable_source',
