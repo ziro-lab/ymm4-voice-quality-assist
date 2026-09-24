@@ -171,11 +171,13 @@ internal static class Probe
             true);
 
         var manager =
-            AcquireUndoManager(main);
+            AcquireUndoManager(main)
+            ?? throw new InvalidOperationException(
+                "UndoRedoManager was null.");
 
         Check(
             "undo_manager_resolved",
-            manager is not null);
+            true);
 
         var engine =
             new VOICEVOXEngine(
