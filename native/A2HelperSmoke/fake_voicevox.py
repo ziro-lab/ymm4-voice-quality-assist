@@ -49,7 +49,32 @@ def mora_texts(text):
     }
     return table.get(text, list(text))
 
+def pause():
+    return {
+        "text": "、",
+        "consonant": None,
+        "consonant_length": None,
+        "vowel": "pau",
+        "vowel_length": 0.25,
+        "pitch": 0.0,
+    }
+
 def phrases_for(text):
+    if text == "エエウエ":
+        return [
+            {
+                "moras": [mora("エ")],
+                "accent": 1,
+                "pause_mora": pause(),
+                "is_interrogative": False,
+            },
+            {
+                "moras": [mora("エ"), mora("ウ"), mora("エ")],
+                "accent": 1,
+                "pause_mora": None,
+                "is_interrogative": False,
+            },
+        ]
     return [{
         "moras": [mora(x) for x in mora_texts(text)],
         "accent": 1,
