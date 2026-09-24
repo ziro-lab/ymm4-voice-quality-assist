@@ -255,8 +255,13 @@ internal static class Probe
                 active,
                 productTool);
 
-            var toolInvoked = TryOpenProductTool(main);
-            Check("product_tool_open_invoked", toolInvoked);
+            var runtimePluginRegistered = PluginLoader.Plugins
+                .Any(x =>
+                    string.Equals(
+                        x.GetType().FullName,
+                        "Ymm4VoiceQualityAssist.Runtime.VoiceQualityAssistPlugin",
+                        StringComparison.Ordinal));
+            Check("product_runtime_plugin_registered", runtimePluginRegistered);
 
             await WaitUntil(
                 "initial correction",
