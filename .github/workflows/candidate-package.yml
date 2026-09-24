@@ -55,6 +55,28 @@ jobs:
           if($LASTEXITCODE -ne 0){ throw 'Product build failed' }
           dotnet test tests/Ymm4VoiceQualityAssist.Tests/Ymm4VoiceQualityAssist.Tests.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" --nologo --logger 'trx;LogFileName=tests.trx' --results-directory out/tests
           if($LASTEXITCODE -ne 0){ throw 'Tests failed' }
+      - name: Native tests on the candidate DLL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $env:GITHUB_SHA=(git rev-parse HEAD).Trim()
+          $product=(Resolve-Path out/product).Path + [IO.Path]::DirectorySeparatorChar
+          foreach($suite in @('A1Smoke','A2HelperSmoke','A3ProsodySmoke','B3ImportSmoke')){
+            $probe=Join-Path $PWD "out/probes/$suite"
+            $evidence=Join-Path $PWD "out/native/$suite"
+            dotnet build "native/$suite/src/Probe/Probe.csproj" -c Release "-p:YMM4DirPath=$env:YMM4_DIR" "-p:ProductDirPath=$product" -o $probe --nologo -warnaserror
+            if($LASTEXITCODE -ne 0){ throw "Probe build failed: $suite" }
+            $userDir=Join-Path $env:YMM4_DIR 'user'
+            if(Test-Path $userDir){ Remove-Item $userDir -Recurse -Force }
+            & "./native/$suite/RunNative.ps1" -Ymm4Dir $env:YMM4_DIR -ProductDir $product -ProbeDir $probe -OutputDir $evidence
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: candidate-native-evidence
+          path: out/native/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Package only product files
         if: ${{ hashFiles('docs/CANDIDATE_GUIDE_JA.md') != '' }}
         shell: pwsh

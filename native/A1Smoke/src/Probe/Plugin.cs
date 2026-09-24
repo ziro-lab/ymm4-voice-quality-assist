@@ -343,6 +343,32 @@ internal static class Probe
                 "compatible_hatsuon_reapplies_same_corrected_wav",
                 HashFile(voicePath) == correctedHash);
 
+            // Hold an actual corrected synthesis response while the user disables Assist.
+            var discardedBefore = RuntimeCounter("DiscardedResults");
+            File.WriteAllText(Path.Combine(output, "delay-next-corrected"), "1");
+            voice.Pronounce = null!;
+            await WaitUntil("delayed corrected request", () =>
+                File.Exists(Path.Combine(output, "corrected-request-waiting")));
+            effect.IsEnabled = false;
+            await WaitUntil("discard superseded correction", () =>
+                RuntimeCounter("DiscardedResults") > discardedBefore);
+            await WaitUntil("disable during generation restores baseline", () =>
+                File.Exists(voicePath) && HashFile(voicePath) == baselineHash);
+            Check("inflight_disable_discards_old_result", RuntimeCounter("DiscardedResults") > discardedBefore);
+            Check("inflight_disable_restores_baseline", HashFile(voicePath) == baselineHash);
+
+            var rulesProperty = effect.GetType().GetProperty("HelperRulesJson")
+                ?? throw new MissingMemberException("HelperRulesJson");
+            var savedRules = rulesProperty.GetValue(effect);
+            var attemptsBefore = RuntimeCounter("GenerationAttempts");
+            rulesProperty.SetValue(effect, "{ignored-while-disabled}");
+            await Task.Delay(650);
+            Check("disabled_config_does_not_resynthesize", RuntimeCounter("GenerationAttempts") == attemptsBefore);
+            rulesProperty.SetValue(effect, savedRules);
+            effect.IsEnabled = true;
+            await WaitUntil("recovery after discarded correction", () => IsCorrected(voice, voicePath));
+            Check("reenable_after_superseded_recovers", HashFile(voicePath) == correctedHash);
+
             File.WriteAllText(
                 Path.Combine(output, "observation.json"),
                 JsonSerializer.Serialize(
@@ -960,6 +986,16 @@ internal static class Probe
                 char.IsLetterOrDigit(ch)
                     ? ch
                     : '-'));
+
+    static long RuntimeCounter(string name)
+    {
+        var type = AppDomain.CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("Ymm4VoiceQualityAssist.Runtime.AssistRuntimeStatus", false))
+            .FirstOrDefault(t => t is not null)
+            ?? throw new TypeLoadException("AssistRuntimeStatus");
+        var current = type.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        return Convert.ToInt64(type.GetProperty(name)?.GetValue(current), CultureInfo.InvariantCulture);
+    }
 
     static string HashFile(string path) =>
         Convert.ToHexString(

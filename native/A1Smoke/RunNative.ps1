@@ -96,7 +96,11 @@ try {
       'marker_removal_restores_baseline',
       'marker_restore_reapplies_correction',
       'incompatible_hatsuon_restores_baseline',
-      'compatible_hatsuon_reapplies_same_corrected_wav'
+      'compatible_hatsuon_reapplies_same_corrected_wav',
+      'inflight_disable_discards_old_result',
+      'inflight_disable_restores_baseline',
+      'disabled_config_does_not_resynthesize',
+      'reenable_after_superseded_recovers'
     )
 
     if($r.requirements.Count-ne$required.Count){

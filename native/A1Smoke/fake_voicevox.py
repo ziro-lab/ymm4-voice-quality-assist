@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import time
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -189,6 +190,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path == "/synthesis":
             wav, corrected = wav_for_synthesis(raw)
+            delay_flag = os.path.join(args.output, "delay-next-corrected")
+            if corrected and os.path.exists(delay_flag):
+                os.unlink(delay_flag)
+                with open(os.path.join(args.output, "corrected-request-waiting"), "w") as f:
+                    f.write("waiting")
+                time.sleep(1.0)
             log({
                 "method": "OBSERVE",
                 "path": "/synthesis-result",
