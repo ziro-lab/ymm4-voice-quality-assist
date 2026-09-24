@@ -7,7 +7,6 @@
     <AssemblyName>Ymm4VoiceQualityAssistNativeProbe</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Ymm4VoiceQualityAssist"><HintPath>$(ProductDir)Ymm4VoiceQualityAssist.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="YukkuriMovieMaker.Plugin"><HintPath>$(YMM4DirPath)YukkuriMovieMaker.Plugin.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="YukkuriMovieMaker"><HintPath>$(YMM4DirPath)YukkuriMovieMaker.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="YukkuriMovieMaker.Controls"><HintPath>$(YMM4DirPath)YukkuriMovieMaker.Controls.dll</HintPath><Private>false</Private></Reference>
