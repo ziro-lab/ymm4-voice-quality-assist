@@ -87,6 +87,8 @@ try {
       'voice_added_to_timeline',
       'baseline_file_exists',
       'product_effect_type_discovered',
+      'product_tool_registered',
+      'product_runtime_plugin_registered',
       'baseline_wav_shape',
       'initial_correction_applied',
       'disable_restores_baseline',
