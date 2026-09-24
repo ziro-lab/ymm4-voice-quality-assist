@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **Track A A1–A3 + Track B B0–B1 green / early prototype**  
+> Status: **Track A A1–A3 + Track B B0–B2 green / early prototype**  
 > 現時点では配布版プラグインはありません。
 
 ## 二本柱
@@ -145,7 +145,17 @@ B1 final verification:
 - A2 native `35985287645`: GREEN
 - A3 native `35985287677`: GREEN
 
-次の主作業は **B2 LLM review workflow**。実機スピーカー知覚確認とSaveFileDialog/CSVの見た目確認はnon-blocking hands-on acceptanceです。
+B2 LLM review workflowも実装済みです。ToolからB1 packageを埋め込んだLLMレビュー用prompt fileを出力でき、LLMは `ymm4.voice-corrections.v0` の構造化JSONだけを返します。全Voice exactly-one、変更なしは明示的 `noChange`、session/ref/fingerprint/coverageとB0 domain rulesを検証します。B2ではYMM4を変更しません。
+
+B2 final verification:
+
+- source `9fde8e810fedbbd58fc5078be78b201e89d299f9`
+- build/unit `35986180201`: 91/91 PASS / 0 warnings / 0 errors
+- A1 native `35986180608`: GREEN
+- A2 native `35986180270`: GREEN
+- A3 native `35986180221`: GREEN
+
+次の主作業は **B3 Import / Review**。実機スピーカー知覚確認とSaveFileDialog/CSV/LLM promptの見た目確認はnon-blocking hands-on acceptanceです。
 
 ## Documents
 
