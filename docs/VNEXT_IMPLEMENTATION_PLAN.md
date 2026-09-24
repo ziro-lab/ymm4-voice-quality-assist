@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **PHASE 0–1 GREEN / PHASE 2 IN IMPLEMENTATION**
+Status: **PHASE 0–2 GREEN / PHASE 3 NEXT**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -148,9 +148,17 @@ Native:
 
 ## Phase 2 — Effect storage adapter
 
-Status: **IN IMPLEMENTATION / L0.2 GREEN**
+Status: **GREEN**
 
-Current implementation branch: `feature/vnext-audio-effect-storage` / PR #13.
+Accepted product code source: `38549eae374be543ca1c62cd5bff545cc8f7dd47` (PR #13).
+
+Acceptance:
+
+- unit: 165/165 PASS;
+- A1/A2/A3 native regressions: GREEN;
+- B3 import/new-write Audio storage: GREEN;
+- legacy -> Audio migration Commit / one Undo / Redo: GREEN on the real host;
+- B0/source fingerprint remains stable across equivalent legacy/audio storage.
 
 The accepted storage policy is:
 
