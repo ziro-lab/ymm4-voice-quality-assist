@@ -2,6 +2,41 @@
 
 このRoadmapは「機能数」ではなく、**製品として壊れにくい順序**を優先します。
 
+## vNext pronunciation realignment — IMPLEMENTATION PREP
+
+Hands-on candidate feedback changed the intended product meaning of A1.
+
+The original A1 implementation proved useful host/synthesis mechanics, but its semantics were incomplete:
+it only targeted an already-existing VOICEVOX phrase boundary.
+
+The frozen vNext meaning is:
+
+> insert a transient Japanese comma at the requested clean-text boundary so VOICEVOX creates the phrase boundary and performs automatic accent analysis, then set only that plugin-injected comma's PauseMora length to zero.
+
+Preparation documents:
+
+- [vNext Requirements Freeze](VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md)
+- [vNext Implementation Plan](VNEXT_IMPLEMENTATION_PLAN.md)
+
+Blocking Lab gates before the corresponding product slices:
+
+- [ ] L0.1 real VoiceItem: transient `、` creates a new VOICEVOX phrase boundary; only injected pause becomes zero
+- [ ] L0.2 real VoiceItem: Pronunciation Assist can live in Audio Effects with settings/save-reload/notification/pass-through/public collection access
+
+Implementation slices after the gates:
+
+- [ ] A1-vNext forced-boundary core
+- [ ] Effect storage adapter / legacy candidate compatibility
+- [ ] typed Effect detail settings UI
+- [ ] configurable boundary-input token / safe normalization to canonical `<w0>`
+- [ ] Review Bridge wording/semantics alignment
+- [ ] product-native regressions + real VOICEVOX hands-on
+- [ ] next candidate package
+
+The current candidate safety spine (leases, atomic file replacement, fail-closed behavior, B3 journal, fingerprint validation) is retained and should not be broadly rewritten.
+
+---
+
 ## Track A — Local Pronunciation Assist
 
 ### A0. Host route closure — CLOSED
