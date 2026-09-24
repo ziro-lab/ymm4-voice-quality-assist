@@ -1,3 +1,8 @@
+using System.Collections;
+using System.Reflection;
+using Ymm4VoiceQualityAssist.Effects;
+using YukkuriMovieMaker.Plugin.Effects;
+using YukkuriMovieMaker.Project.Items;
 using System.Text;
 using Ymm4VoiceQualityAssist.Core;
 
@@ -270,6 +275,108 @@ public sealed class ReviewIdentityTests
     }
 
     [Fact]
+    public void VoiceItemAdapter_DisabledAssistDoesNotChangeCurrentFingerprint()
+    {
+        var voice = new VoiceItem
+        {
+            CharacterName = "小夜",
+            Serif = "ABC",
+            Hatsuon = "エービーシー",
+        };
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var before,
+                out var beforeError),
+            beforeError);
+
+        var effect =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = false,
+                Prosody =
+                    ProsodyGesture.LightRise,
+                HelperRulesJson =
+                    HelperRuleCodec.Encode(
+                        new HelperRuleSet(
+                            HelperRuleSet.CurrentVersion,
+                            [
+                                HelperRuleFactory.Create(
+                                    "ABC",
+                                    1,
+                                    "ウ",
+                                    HelperMoraKind.ZeroVowel,
+                                    contextLength: 1),
+                            ])),
+            };
+
+        AppendEffect(
+            voice,
+            effect);
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var disabled,
+                out var disabledError),
+            disabledError);
+
+        Assert.Equal(
+            before!.Fingerprint,
+            disabled!.Fingerprint);
+
+        effect.IsEnabled = true;
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var enabled,
+                out var enabledError),
+            enabledError);
+
+        Assert.NotEqual(
+            before.Fingerprint,
+            enabled!.Fingerprint);
+
+        Assert.Contains(
+            "\"prosody\":\"lightRise\"",
+            enabled.CanonicalJson,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VoiceItemAdapter_MalformedEnabledHelperJsonFailsClosed()
+    {
+        var voice = new VoiceItem
+        {
+            CharacterName = "小夜",
+            Serif = "ABC",
+            Hatsuon = "エービーシー",
+        };
+
+        AppendEffect(
+            voice,
+            new PronunciationAssistEffect
+            {
+                IsEnabled = true,
+                HelperRulesJson =
+                    "{not-json",
+            });
+
+        Assert.False(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var result,
+                out var error));
+
+        Assert.Null(result);
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                error));
+    }
+
+    [Fact]
     public void Resolver_OneExactFingerprint_CanAutoApply()
     {
         var result = ReviewTargetResolver.Resolve(
@@ -431,6 +538,79 @@ public sealed class ReviewIdentityTests
         Assert.Equal(
             2,
             result.CandidateCount);
+    }
+
+    static void AppendEffect(
+        VoiceItem voice,
+        IVideoEffect effect)
+    {
+        var property =
+            typeof(VoiceItem).GetProperty(
+                nameof(VoiceItem.JimakuVideoEffects),
+                BindingFlags.Instance
+                | BindingFlags.Public)
+            ?? throw new MissingMemberException(
+                typeof(VoiceItem).FullName,
+                nameof(VoiceItem.JimakuVideoEffects));
+
+        var current =
+            property.GetValue(voice)
+            ?? throw new InvalidOperationException(
+                "JimakuVideoEffects returned null.");
+
+        if (current is IList list
+            && !list.IsReadOnly
+            && !list.IsFixedSize)
+        {
+            list.Add(effect);
+            return;
+        }
+
+        var add = current.GetType()
+            .GetMethods(
+                BindingFlags.Instance
+                | BindingFlags.Public)
+            .FirstOrDefault(x =>
+                x.Name == "Add"
+                && x.GetParameters().Length == 1
+                && (
+                    x.GetParameters()[0]
+                        .ParameterType
+                        .IsAssignableFrom(
+                            effect.GetType())
+                    || x.GetParameters()[0]
+                        .ParameterType
+                        .IsAssignableFrom(
+                            typeof(IVideoEffect))));
+
+        if (add is null)
+        {
+            throw new InvalidOperationException(
+                "JimakuVideoEffects has no supported Add route.");
+        }
+
+        var updated =
+            add.Invoke(
+                current,
+                [effect]);
+
+        if (updated is null
+            || ReferenceEquals(
+                updated,
+                current))
+        {
+            return;
+        }
+
+        if (property.SetMethod?.IsPublic != true)
+        {
+            throw new InvalidOperationException(
+                "JimakuVideoEffects is immutable without a public setter.");
+        }
+
+        property.SetValue(
+            voice,
+            updated);
     }
 
     static SourceFingerprintInput Input(
