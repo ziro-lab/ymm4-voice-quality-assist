@@ -38,7 +38,8 @@
 - [ ] Assist Effect
 - [ ] VoiceItem observer/controller
 - [ ] `<w0>` boundary extraction
-- [ ] boundary → target AccentPhrase mapping
+- [ ] boundary → target AccentPhrase mapping（Serif位置をmora indexとして扱わない）
+- [ ] same-speaker reading resolver（`ConvertKanjiToYomiAsync`候補、exact match時のみ適用）
 - [ ] target PauseMora duration = 0
 - [ ] regeneration reapply
 - [ ] no-op when Effect is absent/disabled
