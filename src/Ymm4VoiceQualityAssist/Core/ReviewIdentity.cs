@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Ymm4VoiceQualityAssist.Effects;
 using YukkuriMovieMaker.Project.Items;
@@ -108,6 +109,7 @@ public static class SourceFingerprint
                 new JsonWriterOptions
                 {
                     Indented = false,
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                 }))
         {
             writer.WriteStartObject();
@@ -226,7 +228,13 @@ public static class SourceFingerprint
             new MemoryStream();
 
         using (var writer =
-            new Utf8JsonWriter(buffer))
+            new Utf8JsonWriter(
+                buffer,
+                new JsonWriterOptions
+                {
+                    Indented = false,
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                }))
         {
             WriteProfile(writer, profile);
             writer.Flush();
