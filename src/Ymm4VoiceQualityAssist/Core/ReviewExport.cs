@@ -20,7 +20,8 @@ public sealed record ReviewVoiceExportRecord(
     string? Hatsuon,
     ReviewVoiceContext Context,
     ReviewVoiceControls Controls,
-    ReviewVoiceAssistSettings Assist);
+    ReviewVoiceAssistSettings Assist,
+    ReviewVoicePronunciationSummary Pronunciation);
 
 public sealed record ReviewVoiceTarget(
     string ExportRef,
@@ -47,6 +48,11 @@ public sealed record ReviewVoiceBoundary(
 public sealed record ReviewVoiceAssistSettings(
     bool Enabled,
     IReadOnlyList<SourceFingerprintAssistProfile> Profiles);
+
+public sealed record ReviewVoicePronunciationSummary(
+    bool HasGeneratedPronounce,
+    string? GeneratedMoraReading,
+    int? AccentPhraseCount);
 
 public sealed record ReviewExportSession(
     ReviewExportPackage Package,
@@ -247,7 +253,9 @@ public static class ReviewExportBuilder
                             .AssistProfiles.Count > 0,
                         current.Input
                             .AssistProfiles
-                            .ToArray()));
+                            .ToArray()),
+                    BuildPronunciationSummary(
+                        current.Voice));
         }
 
         var package =
@@ -267,6 +275,38 @@ public static class ReviewExportBuilder
             new ReviewExportSession(
                 package,
                 liveTargets));
+    }
+
+    static ReviewVoicePronunciationSummary
+        BuildPronunciationSummary(
+            VoiceItem voice)
+    {
+        if (voice.Pronounce is null)
+        {
+            return new ReviewVoicePronunciationSummary(
+                false,
+                null,
+                null);
+        }
+
+        if (!VoiceVoxPronounceAdapter.TryProject(
+            voice.Pronounce,
+            out var projection,
+            out _)
+            || projection is null)
+        {
+            return new ReviewVoicePronunciationSummary(
+                true,
+                null,
+                null);
+        }
+
+        return new ReviewVoicePronunciationSummary(
+            true,
+            string.Concat(
+                projection.Readings
+                    .SelectMany(x => x.MoraTexts)),
+            projection.Readings.Count);
     }
 }
 
