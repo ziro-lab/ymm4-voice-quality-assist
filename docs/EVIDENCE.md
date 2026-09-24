@@ -21,6 +21,8 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 | [PR #133 — Public Undo manager acquisition](https://github.com/ziro-lab/chat-native-work-lab-001/pull/133) | real `ITimelineToolViewModel.SetTimelineToolInfo(TimelineToolInfo)` へYMM4自身がnon-null `Timeline` / `UndoRedoManager`を渡す。managerの`AddCommand` / `Record` / `UndoAsync` / `RedoAsync`もpublic。 | timeline-tool/controller以外の取得形態は未評価。 |
 | [PR #135 — VoiceItem audio/cache refresh surface](https://github.com/ziro-lab/chat-native-work-lab-001/pull/135) | baseline/corrected WAVが実`VoiceItem.FilePath`で別SHA256。public `VoiceCache : byte[]`をstale 5-byte sentinelから`ClearVoiceCache()`でnullへ破棄し、corrected WAVは保持。Pronounce/VoiceCache通知と`Timeline.CurrentFrame`通知も確認。 | GitHub-hosted Windowsでの物理スピーカー知覚確認は対象外。専用public preview/audio redraw APIは確認されず。 |
 
+| [PR #136 — <w0> real VoiceItem voice path](https://github.com/ziro-lab/chat-native-work-lab-001/pull/136) | Serif-only `<w0>`はofficial parserではclean-text boundaryとして解決されるが、baselineと同じVOICEVOX HTTP/Pronounce生成構造になり自動AccentPhrase境界化されない。Hatsuonへliteral `<w0>`を入れるとそのままVOICEVOXへ渡るため不採用。 | A1 semantic resolverは別途必要。 |
+
 ## Current evidence chain
 
 現時点で、次の部品は実ホスト上でつながっています。
