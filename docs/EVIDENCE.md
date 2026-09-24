@@ -27,6 +27,8 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 
 | [PR #140 — Transient helper mora](https://github.com/ziro-lab/chat-native-work-lab-001/pull/140) | Real VoiceItemでpersisted Serif/Hatsuonを変更せず、transient readingだけへhelper kanaを挿入。`エウエウエ`のhelper `ウ.vowel_length=0`、`エセエ`のhelper `セ.consonant_length=0` + `vowel_length=0.12`維持を実`/synthesis` JSONまで確認。corrected WAVはそれぞれ5444/5644 bytes。 | durable schema/anchor/reloadはProduct PR #3で閉じた。 |
 
+| [PR #141 — Relative VOICEVOX mora pitch](https://github.com/ziro-lab/chat-native-work-lab-001/pull/141) | Real VoiceItemのfresh built-in VOICEVOX Pronounceでpublic Mora.Pitchへsmall relative rise/fall offsetを適用し、durationを保持したままpublic synthesisへ渡せる。最終 /synthesis JSONでexact pitch arrayを確認し、Serif/Hatsuonは不変。 | product gesture persistence/lifecycleはProduct PR #4で閉じた。 |
+
 Lab #140 helper-mora chain:
 
 - run `35961814286`
@@ -41,6 +43,8 @@ Lab #140 helper-mora chain:
 | --- | --- | --- |
 | [Product PR #2 — A1 Zero-pause MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/2) | Real YMM4 Lite 4.56.1.0上で製品DLLそのものを別pluginとしてロードし、Toolを開かず自動runtime起動。baseline WAV（4844 bytes / SHA256 `58a2f64e...`）→ corrected WAV（5444 bytes / SHA256 `285df804...`）へ補正。Effect disableでbaseline、re-enableで同一corrected SHA256、marker removeでbaseline、marker restoreでcorrected、Hatsuon不一致でfail-closed baseline、互換Hatsuon復帰で同一corrected WAVへ再適用。通常CIは13/13 tests PASS。 | 物理スピーカーでの知覚確認は対象外。project save/reloadそのものの製品native smokeはLab #131/#132のhost evidenceに依存。 |
 | [Product PR #3 — A2 Helper mora MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/3) | Version付きhelper JSONをAssist Effectへdurable保存。position + left/right contextでsource編集後にanchorを一意再解決し、same-speaker prefix readingからcurrent Hatsuon境界へexact mapping。transient augmented reading上でhelper moraを累積Mora.Textから再特定し、zeroVowel / zeroConsonantを適用。曖昧anchorではbaselineへfail closed。A1 `<w0>`との同居、実project save/reload後のJSON復元→fixture speaker rebind→自動helper再適用まで実YMM4でGREEN。 | A2 MVPは1 helper rule = exactly 1 inserted VOICEVOX moraを要求。物理スピーカー知覚確認は対象外。 |
+
+| [Product PR #4 — A3 Optional prosody MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/4) | `None / LightRise / LightFall / Hold` をfresh baseline pitchへ相対適用。pitch=0 / zero-vowel helper moraをgesture対象から除外。None/disableでbaseline復帰し、real project save/reloadでProsody=Hold復元→fixture speaker rebind→automatic product reapplyまでGREEN。A1/A2 native regressionもGREEN。 | stronger acting presets（smooth/sigh-like/surprise-like）と物理スピーカー知覚確認は別途。 |
 
 Native chain:
 
@@ -141,3 +145,16 @@ API/既存コード/設計上は成立しそうだが、製品条件の実ホス
 - A1 native regression run `35971940306`: GREEN
 
 A2 native acceptance includes vowel helper x2, consonant helper with vowel preservation, source-prefix insertion followed by safe anchor relocation, ambiguous-context baseline restoration, combined `<w0>` + helper correction on one Pronounce, and real project save/reload with exact `HelperRulesJson` restoration and automatic reapply.
+
+### Product A3 final native chain
+
+- run `35979300166`
+- job `107567421818`
+- source `dcc43d6ccfcc83f2602f1404ded3eb1f40f64e9f`
+- artifact `10799671345`
+- artifact SHA256 `5747b60beb3642e4e312034abf7fae0ce9326efa5c4b4919e7c54414b48c21e8`
+- normal build/unit run `35979300189`: GREEN
+- A1 native regression `35979300297`: GREEN
+- A2 native regression `35979300153`: GREEN
+
+A3 native acceptance covers LightRise/LightFall/None/Hold transitions, baseline restoration on None/disable, re-enable reapply, persisted Serif/Hatsuon invariance, real project save/reload, exact `Prosody=Hold` restoration and automatic Hold regeneration after reload.

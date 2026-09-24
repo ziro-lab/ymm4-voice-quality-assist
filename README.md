@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **A1 Zero-pause MVP product-native green / early prototype**  
+> Status: **Track A A1–A3 product-native green / early prototype**  
 > 現時点では配布版プラグインはありません。
 
 ## 二本柱
@@ -123,7 +123,17 @@ A2 final native chain:
 - build/unit `35971940326`: 22/22 PASS
 - A1 native regression `35971940306`: GREEN
 
-次の機能候補は **A3 Optional prosody assist**。A1/A2の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
+A3 Optional prosody assistも製品MVPまで完了しました。Lab #141でbaseline-relative Mora.Pitch mutationを実証し、製品側では `None / LightRise / LightFall / Hold` を同じdetached Pronounceへ重ねます。Effect disable / Noneでbaseline復帰し、real project save/reload後のProsody設定復元と自動再適用までnative GREENです。
+
+A3 final native chain:
+
+- run `35979300166`
+- job `107567421818`
+- source `dcc43d6ccfcc83f2602f1404ded3eb1f40f64e9f`
+- artifact `10799671345`
+- SHA256 `5747b60beb3642e4e312034abf7fae0ce9326efa5c4b4919e7c54414b48c21e8`
+
+Track Aの当初MVP範囲（A0〜A3）は閉じました。次の主作業は **Track B / Voice Review Bridge**。実機スピーカー知覚確認は引き続きnon-blocking hands-on acceptanceです。
 
 ## Documents
 

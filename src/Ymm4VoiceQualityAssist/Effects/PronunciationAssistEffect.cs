@@ -1,4 +1,5 @@
 using Vortice.Direct2D1;
+using Ymm4VoiceQualityAssist.Core;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Exo;
 using YukkuriMovieMaker.Player.Video;
@@ -22,6 +23,18 @@ public sealed class PronunciationAssistEffect : VideoEffectBase
         get;
         set => Set(ref field, value);
     } = string.Empty;
+
+    /// <summary>
+    /// Optional baseline-relative pitch gesture.
+    ///
+    /// None means no prosody mutation. Generated pitch values are derived
+    /// runtime state and are never persisted separately.
+    /// </summary>
+    public ProsodyGesture Prosody
+    {
+        get;
+        set => Set(ref field, value);
+    } = ProsodyGesture.None;
 
     public override IEnumerable<string> CreateExoVideoFilters(
         int keyFrameIndex,

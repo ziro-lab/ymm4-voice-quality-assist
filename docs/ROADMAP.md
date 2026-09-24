@@ -77,21 +77,34 @@ Product native evidence:
 - build/unit run `35971940326`: 22/22 PASS / 0 warnings / 0 errors
 - A1 native regression run `35971940306`: GREEN
 
-### A3. Optional prosody assist
+### A3. Optional prosody assist — CLOSED / PRODUCT NATIVE GREEN
 
-最初から万能化しない。
+MVPは万能な演技補正ではなく、fresh VOICEVOX baseline pitchへ小さい相対カーブを重ねる。
 
-候補:
+- [x] Lab #141でpublic Mora.Pitchのrelative mutation → public synthesis → real VoiceItemを確認
+- [x] `None`
+- [x] `LightRise`
+- [x] `LightFall`
+- [x] `Hold`
+- [x] pitch=0 / zero-vowel helper moraをgesture対象から除外
+- [x] A1 zero-pause / A2 helperの後に同じdetached Pronounceへprosodyを重ねる
+- [x] Effect disable / `None` でbaselineへ復帰
+- [x] real project save/reloadでProsody設定を復元
+- [x] reload後のautomatic product reapply
+- [x] A1/A2 native regression GREEN
 
-- none
-- smooth
-- light rise
-- light fall
-- hold
-- sigh-like
-- surprise-like
+Product native evidence:
 
-VOICEVOXのbaseline pitchへ相対的に適用し、固定絶対値は避ける。
+- run `35979300166`
+- job `107567421818`
+- source `dcc43d6ccfcc83f2602f1404ded3eb1f40f64e9f`
+- artifact `10799671345`
+- artifact SHA256 `5747b60beb3642e4e312034abf7fae0ce9326efa5c4b4919e7c54414b48c21e8`
+- normal build/unit run `35979300189`: GREEN
+- A1 native regression `35979300297`: GREEN
+- A2 native regression `35979300153`: GREEN
+
+`smooth` / `sigh-like` / `surprise-like` はMVP完了条件に含めず、将来拡張として別途検証する。
 
 ---
 

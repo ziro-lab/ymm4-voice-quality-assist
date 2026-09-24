@@ -16,8 +16,10 @@ public enum AssistApplyStatus
     EmptyHatsuon,
     NoMarkers,
     InvalidHelperRules,
+    InvalidProsodyConfiguration,
     HelperResolutionFailed,
     HelperMutationFailed,
+    ProsodyMutationFailed,
     ResolutionFailed,
     MutationFailed,
     SynthesisFailed,
@@ -49,6 +51,11 @@ public sealed class ZeroPauseApplyService
             .Any(effect =>
                 !string.IsNullOrWhiteSpace(effect.HelperRulesJson));
 
+    public bool HasProsodyConfiguration(VoiceItem voice) =>
+        EnumerateAssistEffects(voice)
+            .Any(effect =>
+                effect.Prosody != ProsodyGesture.None);
+
     public bool TryGetHelperRuleSet(
         VoiceItem voice,
         out HelperRuleSet ruleSet,
@@ -78,6 +85,33 @@ public sealed class ZeroPauseApplyService
         return true;
     }
 
+    public bool TryGetProsodyGesture(
+        VoiceItem voice,
+        out ProsodyGesture gesture,
+        out string? error)
+    {
+        var configured = EnumerateAssistEffects(voice)
+            .Where(x => x.IsEnabled)
+            .Select(x => x.Prosody)
+            .Where(x => x != ProsodyGesture.None)
+            .Distinct()
+            .ToArray();
+
+        if (configured.Length > 1)
+        {
+            gesture = ProsodyGesture.None;
+            error =
+                "More than one enabled Assist Effect specifies a different prosody gesture.";
+            return false;
+        }
+
+        gesture = configured.Length == 1
+            ? configured[0]
+            : ProsodyGesture.None;
+        error = null;
+        return true;
+    }
+
     public async Task<AssistApplyResult> ApplyAsync(VoiceItem voice)
     {
         ArgumentNullException.ThrowIfNull(voice);
@@ -96,18 +130,33 @@ public sealed class ZeroPauseApplyService
                 helperRuleError ?? "Helper rule JSON is invalid.");
         }
 
+        if (!TryGetProsodyGesture(
+            voice,
+            out var prosody,
+            out var prosodyError))
+        {
+            return new AssistApplyResult(
+                AssistApplyStatus.InvalidProsodyConfiguration,
+                0,
+                null,
+                prosodyError
+                    ?? "Prosody configuration is invalid.");
+        }
+
         var hasMarkers =
             markerSource.ZeroWaitPositions.Count > 0;
         var hasHelpers =
             helperRules.Rules.Count > 0;
+        var hasProsody =
+            prosody != ProsodyGesture.None;
 
-        if (!hasMarkers && !hasHelpers)
+        if (!hasMarkers && !hasHelpers && !hasProsody)
         {
             return new AssistApplyResult(
                 AssistApplyStatus.NoMarkers,
                 0,
                 null,
-                "No zero-pause markers or helper-mora rules were found.");
+                "No zero-pause markers, helper-mora rules, or prosody gesture were found.");
         }
 
         if (!TryResolveVoiceContext(
@@ -275,6 +324,24 @@ public sealed class ZeroPauseApplyService
 
                 mutatedCount += mutation.MutatedPhraseCount;
                 boundaryStatus = resolution.Status;
+            }
+
+            if (hasProsody)
+            {
+                var prosodyMutation = ProsodyMoraMutator.Apply(
+                    projection,
+                    prosody);
+
+                if (!prosodyMutation.IsSuccess)
+                {
+                    return new AssistApplyResult(
+                        AssistApplyStatus.ProsodyMutationFailed,
+                        0,
+                        boundaryStatus,
+                        prosodyMutation.Message);
+                }
+
+                mutatedCount += prosodyMutation.MutatedMoraCount;
             }
 
             IVoicePronounce? regenerated;
