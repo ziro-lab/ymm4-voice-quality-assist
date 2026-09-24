@@ -574,18 +574,9 @@ public sealed class ZeroPauseApplyService
             : voice.FilePath;
     }
 
-    static IEnumerable<PronunciationAssistEffect> EnumerateAssistEffects(
-        VoiceItem voice)
-    {
-        if (voice.JimakuVideoEffects is not IEnumerable effects)
-            yield break;
-
-        foreach (var value in effects)
-        {
-            if (value is PronunciationAssistEffect effect)
-                yield return effect;
-        }
-    }
+    static IEnumerable<IPronunciationAssistSettings> EnumerateAssistEffects(
+        VoiceItem voice) =>
+        ReviewAssistEffectCollection.Enumerate(voice);
 
     static AssistApplyResult Superseded()
     {
