@@ -75,9 +75,14 @@ public sealed class VoiceApplyLease : IDisposable
     {
         if (string.IsNullOrEmpty(e.PropertyName)
             || e.PropertyName is "Serif" or "Hatsuon" or "Character" or "CharacterName"
-                or "VoiceParameter" or "JimakuVideoEffects" or "AudioEffects"
+                or "VoiceParameter"
+            || PronunciationAssistSettingsStore
+                .IsStorageCollectionProperty(
+                    e.PropertyName)
             || (outputPinned && e.PropertyName is "Pronounce" or "FilePath" or "VoiceCache"))
+        {
             Interlocked.Exchange(ref invalidated, 1);
+        }
     }
 
     void OnInputChanged(object? sender, PropertyChangedEventArgs e) =>
