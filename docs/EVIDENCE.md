@@ -25,6 +25,20 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 
 | [PR #137 — Same-speaker reading prefix resolver](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137) | public `ConvertKanjiToYomiAsync`はbuilt-in VOICEVOX speakerで`/audio_query?text=...`を使い、full/prefix readingを返す。normalized prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付け、PauseMora存在まで確認。 | 実文ごとのprefix安定性は保証せず、exact per-item validationでfail closed。 |
 
+## Product native evidence
+
+| Evidence | Proven | Boundary |
+| --- | --- | --- |
+| [Product PR #2 — A1 Zero-pause MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/2) | Real YMM4 Lite 4.56.1.0上で製品DLLそのものを別pluginとしてロードし、Toolを開かず自動runtime起動。baseline WAV（4844 bytes / SHA256 `58a2f64e...`）→ corrected WAV（5444 bytes / SHA256 `285df804...`）へ補正。Effect disableでbaseline、re-enableで同一corrected SHA256、marker removeでbaseline、marker restoreでcorrected、Hatsuon不一致でfail-closed baseline、互換Hatsuon復帰で同一corrected WAVへ再適用。通常CIは13/13 tests PASS。 | 物理スピーカーでの知覚確認は対象外。project save/reloadそのものの製品native smokeはLab #131/#132のhost evidenceに依存。 |
+
+Native chain:
+
+- run `35961051326`
+- job `107509502673`
+- source `601d3ad4736d9a21a0c75a00042f6169ea42e542`
+- artifact `10792103203`
+- artifact SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
+
 ## Current evidence chain
 
 現時点で、次の部品は実ホスト上でつながっています。
@@ -79,7 +93,11 @@ public corrected synthesis back to reloaded VoiceItem
 
 public合成接続点はPR #125、実VoiceItemへの生成→補正→再生成E2EはPR #128で閉じました。PR #131ではsave/reload境界を確認し、`Pronounce`自体は保存せず、`<w0>`・Hatsuon・Assist Effect設定をdurable sourceとして扱う方針を確定しました。さらにPR #132で、reload後にそのdurable sourceからCorrectionを再解決し、fresh Pronounce/WAVへ補正を再適用するE2Eも閉じました。
 
-PR #130ではPronounce + WAVを1つのhost Undo単位に載せ、YMM4標準Undo/Redo commandからも往復できることを確認済みです。PR #133でcurrent managerもpublic `TimelineToolInfo.UndoRedoManager` から取得できることを確認しました。PR #135でWAV置換後の`VoiceCache`破棄・Pronounce再装着・通常host state通知まで閉じ、専用preview/audio redraw APIへの依存は不要と判断します。Effect disable/removeの状態遷移はPR #134で閉じました。Voice Review側のv0 identityは、Guidではなくsession ref + fingerprint再解決を採用します。
+PR #130ではPronounce + WAVを1つのhost Undo単位に載せ、YMM4標準Undo/Redo commandからも往復できることを確認済みです。PR #133でcurrent managerもpublic `TimelineToolInfo.UndoRedoManager` から取得できることを確認しました。PR #135でWAV置換後の`VoiceCache`破棄・Pronounce再装着・通常host state通知まで閉じ、専用preview/audio redraw APIへの依存は不要と判断します。Effect disable/removeの状態遷移はPR #134で閉じました。
+
+Product PR #2では、これらのhost evidenceを製品コードへ統合し、ModuleInitializerで自動runtimeを起動、internal `MainViewModel`上の**public** `ActiveTimelineViewModel` getterだけをbounded reflectionで取得した後、public `TimelineViewModel.Items -> TimelineItemViewModel.Item -> VoiceItem`経路で監視する構成をnative GREENにしました。private fieldやHarmonyは使用していません。
+
+Voice Review側のv0 identityは、Guidではなくsession ref + fingerprint再解決を採用します。
 
 ## Evidence labels
 
