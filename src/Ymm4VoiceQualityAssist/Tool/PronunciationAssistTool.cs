@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using Ymm4VoiceQualityAssist.Runtime;
 using YukkuriMovieMaker.Plugin;
 
 namespace Ymm4VoiceQualityAssist.Tool;
@@ -22,7 +21,7 @@ public sealed class PronunciationAssistToolView : UserControl
     {
         Content = new TextBlock
         {
-            Text = "Voice Quality Assist\n<w0> がある発音補助アイテムを監視します。",
+            Text = "Voice Quality Assist\nバックグラウンド監視は自動で動作します。\n<w0> を含む発音補助アイテムだけを処理します。",
             Margin = new Thickness(12),
             TextWrapping = TextWrapping.Wrap,
         };
@@ -30,31 +29,13 @@ public sealed class PronunciationAssistToolView : UserControl
 }
 
 public sealed class PronunciationAssistToolViewModel :
-    ITimelineToolViewModel,
-    IDisposable
+    ITimelineToolViewModel
 {
-    PronunciationAssistController? controller;
-
     public void SetTimelineToolInfo(TimelineToolInfo info)
     {
-        controller?.Dispose();
-        controller = null;
-
-        if (info.Timeline is null
-            || info.UndoRedoManager is null)
-        {
-            return;
-        }
-
-        controller = new PronunciationAssistController(
-            info.Timeline,
-            info.UndoRedoManager);
-    }
-
-    public void Dispose()
-    {
-        controller?.Dispose();
-        controller = null;
-        GC.SuppressFinalize(this);
+        // The A1 runtime is started by IPlugin.Initialize and follows
+        // MainViewModel.ActiveTimelineViewModel through public APIs.
+        // The Tool is optional status/help UI and must not create a
+        // second controller.
     }
 }
