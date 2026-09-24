@@ -25,6 +25,16 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 
 | [PR #137 — Same-speaker reading prefix resolver](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137) | public `ConvertKanjiToYomiAsync`はbuilt-in VOICEVOX speakerで`/audio_query?text=...`を使い、full/prefix readingを返す。normalized prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付け、PauseMora存在まで確認。 | 実文ごとのprefix安定性は保証せず、exact per-item validationでfail closed。 |
 
+| [PR #140 — Transient helper mora](https://github.com/ziro-lab/chat-native-work-lab-001/pull/140) | Real VoiceItemでpersisted Serif/Hatsuonを変更せず、transient readingだけへhelper kanaを挿入。`エウエウエ`のhelper `ウ.vowel_length=0`、`エセエ`のhelper `セ.consonant_length=0` + `vowel_length=0.12`維持を実`/synthesis` JSONまで確認。corrected WAVはそれぞれ5444/5644 bytes。 | durable helper anchor/schema・source編集後の再位置決めは未freeze。 |
+
+Lab #140 helper-mora chain:
+
+- run `35961814286`
+- job `107511806806`
+- source `3422be366646382317e47bdc2c367e3c525e1d3b`
+- artifact `10792227381`
+- artifact SHA256 `18621932e2b36b65d3417eb61abd464ed3fe6e91b5d83f80b8eb087220b29b2b`
+
 ## Product native evidence
 
 | Evidence | Proven | Boundary |
