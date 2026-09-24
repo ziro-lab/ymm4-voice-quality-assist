@@ -184,10 +184,9 @@ public static class ReviewExportCsv
 
     static string Escape(
         string value) =>
-        """
-        + value.Replace(
-            """,
-            """",
+        "\"" + value.Replace(
+            "\"",
+            "\"\"",
             StringComparison.Ordinal)
-        + """;
+        + "\"";
 }
