@@ -112,8 +112,8 @@ public sealed class HelperRuleTests
     public void AnchorResolver_AmbiguousContextFailsClosed()
     {
         var rule = HelperRuleFactory.Create(
-            "ABX",
-            2,
+            "ZABX",
+            3,
             "ウ",
             HelperMoraKind.ZeroVowel,
             contextLength: 2);
