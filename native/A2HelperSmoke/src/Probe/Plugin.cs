@@ -104,7 +104,7 @@ internal static class Probe
                 }
 
                 timer.Stop();
-                await RunAsync(active, url);
+                await RunAsync(main, active, url);
                 Write("PASS_A2_HELPER_PRODUCT_NATIVE_SMOKE", null);
             }
             catch (Exception ex)
@@ -120,6 +120,7 @@ internal static class Probe
     }
 
     static async Task RunAsync(
+        object main,
         object active,
         string url)
     {
@@ -247,6 +248,13 @@ internal static class Probe
                 parameter,
                 effectType);
 
+            var reload = await RunReloadLifecycleAsync(
+                main,
+                timeline,
+                character,
+                parameter,
+                effectType);
+
             File.WriteAllText(
                 Path.Combine(
                     output,
@@ -258,6 +266,7 @@ internal static class Probe
                         vowel,
                         consonant,
                         combined,
+                        reload,
                     },
                     new JsonSerializerOptions
                     {
@@ -473,6 +482,341 @@ internal static class Probe
                     "VowelLength"),
         };
     }
+
+    static async Task<object> RunReloadLifecycleAsync(
+        object main,
+        Timeline timeline,
+        Character character,
+        IVoiceParameter parameter,
+        Type effectType)
+    {
+        const string serif = "ええ";
+        const string hatsuon = "エエ";
+        const string remark = "A2_RELOAD";
+        const string helperJson =
+            "{\"version\":1,\"rules\":[{\"kind\":\"zeroConsonant\",\"helper\":\"セ\",\"anchor\":{\"position\":1,\"left\":\"え\",\"right\":\"え\"}}]}";
+
+        var voice = CreateVoice(
+            character,
+            parameter,
+            serif,
+            hatsuon,
+            remark);
+
+        var effect = CreateAssistEffect(
+            effectType,
+            helperJson);
+
+        AppendEffect(voice, effect);
+
+        Check(
+            "reload_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                800,
+                11));
+
+        await voice.CreateVoiceFileAsync();
+
+        var path = RequireVoicePath(
+            voice,
+            "reload");
+
+        await WaitUntil(
+            "reload initial helper apply",
+            () =>
+                File.Exists(path)
+                && new FileInfo(path).Length == 5644
+                && ConsonantHelperIsZero(voice));
+
+        Check(
+            "reload_initial_helper_applied",
+            ConsonantHelperIsZero(voice));
+
+        // Fake VOICEVOX is a test fixture, not an installed persistent provider.
+        // Detach it from every synthetic test item before the native save.
+        foreach (var item in timeline.Items.OfType<VoiceItem>())
+        {
+            var name = item.CharacterName;
+            item.Character = new Character
+            {
+                Name = string.IsNullOrWhiteSpace(name)
+                    ? "VQA A2 Persist"
+                    : name,
+            };
+            item.CharacterName = item.Character.Name;
+        }
+
+        voice.Serif = serif;
+        voice.Hatsuon = hatsuon;
+
+        var saveProject = PublicMethod(
+            main,
+            "SaveProject",
+            typeof(string));
+        var openProject = PublicMethod(
+            main,
+            "OpenProject",
+            typeof(string));
+
+        var pathA = Path.Combine(
+            output,
+            "a2-helper-a.ymmp");
+
+        saveProject.Invoke(
+            main,
+            [pathA]);
+
+        await WaitUntil(
+            "save helper project A",
+            () =>
+                File.Exists(pathA)
+                && new FileInfo(pathA).Length > 0);
+
+        var rawA = File.ReadAllText(pathA);
+
+        Check(
+            "reload_project_a_saved",
+            rawA.Contains(
+                "zeroConsonant",
+                StringComparison.Ordinal)
+            && rawA.Contains(
+                "HelperRulesJson",
+                StringComparison.Ordinal));
+
+        voice.Serif = "壊したB";
+        effect.IsEnabled = false;
+        SetHelperRulesJson(
+            effect,
+            string.Empty);
+
+        var pathB = Path.Combine(
+            output,
+            "a2-helper-b.ymmp");
+
+        saveProject.Invoke(
+            main,
+            [pathB]);
+
+        await WaitUntil(
+            "save helper project B",
+            () =>
+                File.Exists(pathB)
+                && new FileInfo(pathB).Length > 0);
+
+        openProject.Invoke(
+            main,
+            [pathA]);
+
+        await WaitUntil(
+            "open helper project A",
+            () =>
+                SamePath(
+                    GetProjectFilePath(main),
+                    pathA)
+                && FindVoice(
+                    main,
+                    remark) is not null,
+            15_000);
+
+        var reloaded = FindVoice(
+            main,
+            remark)
+            ?? throw new InvalidOperationException(
+                "Reloaded A2 VoiceItem was not found.");
+
+        var reloadedEffect = GetAssistEffect(
+            reloaded,
+            effectType)
+            ?? throw new InvalidOperationException(
+                "Reloaded A2 Assist Effect was not found.");
+
+        Check(
+            "reload_source_survives",
+            !ReferenceEquals(
+                voice,
+                reloaded)
+            && reloaded.Serif == serif
+            && reloaded.Hatsuon == hatsuon
+            && reloadedEffect.IsEnabled);
+
+        Check(
+            "reload_effect_rules_exact",
+            string.Equals(
+                GetHelperRulesJson(
+                    reloadedEffect),
+                helperJson,
+                StringComparison.Ordinal));
+
+        // Rebind only the synthetic provider after the real project reload.
+        reloaded.Character = character;
+        reloaded.CharacterName = character.Name;
+        reloaded.VoiceParameter = parameter;
+        reloaded.Serif = serif;
+        reloaded.Hatsuon = hatsuon;
+
+        Check(
+            "reload_fixture_speaker_rebound",
+            reloaded.Character?.Voice?.Speaker is { } rebound
+            && rebound.ID
+                == character.Voice?.Speaker?.ID);
+
+        if (string.IsNullOrWhiteSpace(
+                reloaded.FilePath)
+            || !File.Exists(
+                reloaded.FilePath))
+        {
+            await reloaded.CreateVoiceFileAsync();
+        }
+
+        var reloadedPath = RequireVoicePath(
+            reloaded,
+            "reloaded");
+
+        await WaitUntil(
+            "reload helper automatic reapply",
+            () =>
+                File.Exists(reloadedPath)
+                && new FileInfo(reloadedPath).Length == 5644
+                && ConsonantHelperIsZero(reloaded),
+            25_000);
+
+        Check(
+            "reload_helper_reapplied",
+            ConsonantHelperIsZero(reloaded)
+            && reloaded.Serif == serif
+            && reloaded.Hatsuon == hatsuon);
+
+        return new
+        {
+            pathA,
+            sameObject =
+                ReferenceEquals(
+                    voice,
+                    reloaded),
+            reloaded.Serif,
+            reloaded.Hatsuon,
+            helperRulesJson =
+                GetHelperRulesJson(
+                    reloadedEffect),
+            fileLength =
+                new FileInfo(
+                    reloadedPath).Length,
+            helperConsonantLength =
+                GetMoras(reloaded)
+                    .Where(x =>
+                        GetText(x) == "セ")
+                    .Select(x =>
+                        GetNullableDouble(
+                            x,
+                            "ConsonantLength"))
+                    .SingleOrDefault(),
+        };
+    }
+
+    static MethodInfo PublicMethod(
+        object target,
+        string name,
+        params Type[] types) =>
+        target.GetType().GetMethod(
+            name,
+            BindingFlags.Instance | BindingFlags.Public,
+            binder: null,
+            types,
+            modifiers: null)
+        ?? throw new MissingMethodException(
+            target.GetType().FullName,
+            name);
+
+    static VoiceItem? FindVoice(
+        object main,
+        string remark)
+    {
+        var active = main.GetType().GetProperty(
+            "ActiveTimelineViewModel",
+            BindingFlags.Instance
+            | BindingFlags.Public
+            | BindingFlags.NonPublic)
+            ?.GetValue(main);
+
+        var timeline = active is null
+            ? null
+            : FindTimeline(active);
+
+        return timeline?.Items
+            .OfType<VoiceItem>()
+            .FirstOrDefault(x =>
+                x.Remark == remark);
+    }
+
+    static IVideoEffect? GetAssistEffect(
+        VoiceItem voice,
+        Type effectType)
+    {
+        if (voice.JimakuVideoEffects
+            is not IEnumerable effects)
+        {
+            return null;
+        }
+
+        return effects
+            .Cast<object>()
+            .FirstOrDefault(x =>
+                x.GetType() == effectType)
+            as IVideoEffect;
+    }
+
+    static string? GetHelperRulesJson(
+        IVideoEffect effect) =>
+        effect.GetType().GetProperty(
+            "HelperRulesJson",
+            BindingFlags.Instance | BindingFlags.Public)
+        ?.GetValue(effect)
+        as string;
+
+    static void SetHelperRulesJson(
+        IVideoEffect effect,
+        string value)
+    {
+        var property = effect.GetType().GetProperty(
+            "HelperRulesJson",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new MissingMemberException(
+                effect.GetType().FullName,
+                "HelperRulesJson");
+
+        property.SetValue(
+            effect,
+            value);
+    }
+
+    static string? GetProjectFilePath(
+        object main)
+    {
+        var property = main.GetType().GetProperty(
+            "ProjectFilePath",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new MissingMemberException(
+                main.GetType().FullName,
+                "ProjectFilePath");
+
+        var reactive = property.GetValue(main);
+
+        return reactive?.GetType().GetProperty(
+            "Value",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(reactive)
+            as string;
+    }
+
+    static bool SamePath(
+        string? actual,
+        string expected) =>
+        !string.IsNullOrWhiteSpace(actual)
+        && string.Equals(
+            Path.GetFullPath(actual),
+            Path.GetFullPath(expected),
+            StringComparison.OrdinalIgnoreCase);
 
     static async Task<object> RunCombinedLifecycleAsync(
         Timeline timeline,
