@@ -32,14 +32,14 @@ public sealed class ReviewIdentityTests
                 ]));
 
         const string expectedJson =
-            """{"characterName":"小夜","serif":"東京<w0>大学\n😀","hatsuon":"トウキョウダイガク","assistSource":{"enabled":true,"profiles":[{"prosody":"lightRise","helperRules":[{"kind":"zeroVowel","helper":"ウ","position":2,"left":"東京","right":"大学"}]}]}}""";
+            """{"characterName":"小夜","serif":"東京<w0>大学\n\uD83D\uDE00","hatsuon":"トウキョウダイガク","assistSource":{"enabled":true,"profiles":[{"prosody":"lightRise","helperRules":[{"kind":"zeroVowel","helper":"ウ","position":2,"left":"東京","right":"大学"}]}]}}""";
 
         Assert.Equal(
             expectedJson,
             result.CanonicalJson);
 
         Assert.Equal(
-            "sha256:c60391f9267827b1d5297e5abf17df5d97d9ad7f5d5882d63f76122978138d0a",
+            "sha256:7fa3f4e31c268876868cf51eb70ab2933326684e3eef5847cce6d70cbddb8274",
             result.Fingerprint);
 
         Assert.Equal(
