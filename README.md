@@ -63,6 +63,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
   実VoiceItemのbaseline/corrected WAV差し替え、public `VoiceCache` + `ClearVoiceCache()`、Pronounce再装着、`Timeline.CurrentFrame`通知まで4.56.1.0で確認。専用preview/audio強制refresh APIは確認されず、通常host state経路を採用。
 - [PR #136](https://github.com/ziro-lab/chat-native-work-lab-001/pull/136)  
   Serifの`<w0>`はControlTagParser上の境界としては取れるが、Serif-only markerはVOICEVOX生成構造を自動分割しないことを確認。Hatsuonへliteral tagを入れる経路も不採用。A1には明示的なsemantic boundary resolverが必要。
+- [PR #137](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137)  
+  public `IVoiceSpeaker.ConvertKanjiToYomiAsync`でsame-speaker full/prefix readingを取得し、prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付けられるmechanismを確認。exact match + PauseMora存在時だけ適用するfail-closed resolverを採用可能。
 
 詳細は [docs/EVIDENCE.md](docs/EVIDENCE.md)。
 
