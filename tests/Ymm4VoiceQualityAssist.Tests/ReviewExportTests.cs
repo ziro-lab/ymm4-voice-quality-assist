@@ -153,6 +153,52 @@ public sealed class ReviewExportTests
     }
 
     [Fact]
+    public void Builder_PreservesLiveSameSessionTargetMap()
+    {
+        var later = Voice(
+            200,
+            2,
+            "B",
+            "ビー",
+            "ミコ");
+
+        var earlier = Voice(
+            100,
+            1,
+            "A",
+            "エー",
+            "小夜");
+
+        var result =
+            ReviewExportBuilder.Build(
+                [later, earlier],
+                "session-map",
+                DateTimeOffset.UnixEpoch);
+
+        Assert.True(
+            result.IsSuccess,
+            result.Message);
+
+        var session =
+            Assert.IsType<ReviewExportSession>(
+                result.Session);
+
+        Assert.Equal(
+            "session-map",
+            session.Package.ExportSessionId);
+
+        Assert.Same(
+            earlier,
+            session.LiveTargets[
+                "voice-000000"]);
+
+        Assert.Same(
+            later,
+            session.LiveTargets[
+                "voice-000001"]);
+    }
+
+    [Fact]
     public void Builder_TieUsesOriginalInputOrder()
     {
         var a = Voice(
