@@ -22,7 +22,10 @@ public static class ZeroPauseMutator
                 resolution.Message ?? "Boundary resolution did not succeed.");
         }
 
-        var mutated = 0;
+        // Fail closed atomically: validate the complete target set before
+        // mutating any VOICEVOX object. A stale/replaced Pronounce must never
+        // leave only the first half of a multi-marker correction applied.
+        var targets = new List<YukkuriMovieMaker.Voice.VOICEVOXAccentPhrase>();
 
         foreach (var boundary in resolution.Boundaries)
         {
@@ -31,7 +34,7 @@ public static class ZeroPauseMutator
             {
                 return new ZeroPauseMutationResult(
                     false,
-                    mutated,
+                    0,
                     $"Phrase index {boundary.PhraseIndex} is outside the AudioQuery.");
             }
 
@@ -40,17 +43,19 @@ public static class ZeroPauseMutator
             {
                 return new ZeroPauseMutationResult(
                     false,
-                    mutated,
+                    0,
                     $"Phrase {boundary.PhraseIndex} no longer has a PauseMora.");
             }
 
-            phrase.PauseMora.VowelLength = 0.0;
-            mutated++;
+            targets.Add(phrase);
         }
+
+        foreach (var phrase in targets)
+            phrase.PauseMora!.VowelLength = 0.0;
 
         return new ZeroPauseMutationResult(
             true,
-            mutated,
+            targets.Count,
             null);
     }
 }
