@@ -38,6 +38,7 @@ public sealed class PronunciationAssistToolView : UserControl
     readonly Button csvExportButton;
     readonly Button llmPromptExportButton;
     readonly Button importButton;
+    readonly Button migrateLegacyButton;
 
     public PronunciationAssistToolView()
     {
@@ -107,6 +108,18 @@ public sealed class PronunciationAssistToolView : UserControl
             async (_, _) =>
                 await ImportAsync();
 
+        migrateLegacyButton = new Button
+        {
+            Content = "旧発音補助設定を音声エフェクトへ移行",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 230,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        migrateLegacyButton.Click +=
+            (_, _) =>
+                MigrateLegacySettings();
+
         status = new TextBlock
         {
             Text = "Timelineを開いた状態でエクスポートできます。",
@@ -133,6 +146,7 @@ public sealed class PronunciationAssistToolView : UserControl
                 csvExportButton,
                 llmPromptExportButton,
                 importButton,
+                migrateLegacyButton,
                 status,
                 runtimeStatus,
             },
@@ -309,6 +323,44 @@ public sealed class PronunciationAssistToolView : UserControl
         {
             status.Text =
                 "インポートに失敗しました: "
+                + ex.GetBaseException().Message;
+        }
+        finally
+        {
+            SetActionButtonsEnabled(true);
+        }
+    }
+
+    void MigrateLegacySettings()
+    {
+        if (DataContext
+            is not PronunciationAssistToolViewModel viewModel)
+        {
+            status.Text =
+                "Voice Quality Assistの状態を取得できませんでした。";
+            return;
+        }
+
+        SetActionButtonsEnabled(false);
+
+        try
+        {
+            var result =
+                viewModel.MigrateLegacySettings();
+
+            status.Text =
+                result.IsSuccess
+                    ? result.MigratedCount == 0
+                        ? result.Message
+                            ?? "移行対象の旧設定はありません。"
+                        : $"{result.MigratedCount}件の旧発音補助設定を音声エフェクトへ移行しました。YMM4の元に戻す/やり直しに対応しています。"
+                    : result.Message
+                        ?? "旧発音補助設定を移行できませんでした。";
+        }
+        catch (Exception ex)
+        {
+            status.Text =
+                "旧発音補助設定の移行に失敗しました: "
                 + ex.GetBaseException().Message;
         }
         finally
@@ -511,6 +563,7 @@ public sealed class PronunciationAssistToolView : UserControl
         csvExportButton.IsEnabled = enabled;
         llmPromptExportButton.IsEnabled = enabled;
         importButton.IsEnabled = enabled;
+        migrateLegacyButton.IsEnabled = enabled;
     }
 }
 
@@ -726,6 +779,112 @@ public sealed class PronunciationAssistToolViewModel :
                 + ex.GetBaseException().Message);
         }
     }
+
+    public PronunciationAssistMigrationExecutionResult
+        MigrateLegacySettings()
+    {
+        if (timeline is null)
+        {
+            return PronunciationAssistMigrationExecutionResult
+                .Failure(
+                    "Timelineを取得できませんでした。");
+        }
+
+        if (undoRedoManager is null)
+        {
+            return PronunciationAssistMigrationExecutionResult
+                .Failure(
+                    "YMM4のUndoRedoManagerを取得できませんでした。");
+        }
+
+        var voices =
+            timeline.Items
+                .OfType<VoiceItem>()
+                .ToArray();
+
+        var prepared =
+            PronunciationAssistMigrationBatch
+                .Prepare(voices);
+
+        if (prepared.Status
+            == PronunciationAssistMigrationBatchPrepareStatus.NoChanges)
+        {
+            return PronunciationAssistMigrationExecutionResult
+                .Success(
+                    0,
+                    prepared.Message);
+        }
+
+        if (!prepared.IsReady
+            || prepared.Batch is null)
+        {
+            return PronunciationAssistMigrationExecutionResult
+                .Failure(
+                    prepared.Message
+                    ?? "旧発音補助設定の移行準備に失敗しました。");
+        }
+
+        var batch =
+            prepared.Batch;
+
+        try
+        {
+            undoRedoManager.Record();
+
+            var committed =
+                batch.Commit();
+
+            if (!committed.IsSuccess)
+            {
+                return PronunciationAssistMigrationExecutionResult
+                    .Failure(
+                        committed.Message
+                        ?? "旧発音補助設定の移行に失敗しました。");
+            }
+
+            undoRedoManager.AddCommand(
+                new UndoRedoActionCommand(
+                    batch.UndoOrThrow,
+                    batch.RedoOrThrow));
+
+            undoRedoManager.Record();
+
+            LastReviewExportSession =
+                null;
+
+            return PronunciationAssistMigrationExecutionResult
+                .Success(
+                    batch.ItemCount,
+                    null);
+        }
+        catch (Exception ex)
+        {
+            string? rollbackError = null;
+
+            try
+            {
+                batch.UndoOrThrow();
+            }
+            catch (Exception rollback)
+            {
+                rollbackError =
+                    rollback
+                        .GetBaseException()
+                        .Message;
+            }
+
+            return PronunciationAssistMigrationExecutionResult
+                .Failure(
+                    rollbackError is null
+                        ? "履歴登録に失敗し、移行を戻しました: "
+                            + ex.GetBaseException().Message
+                        : "履歴登録と復旧に失敗しました。上書き保存せず対象を確認してください: "
+                            + rollbackError
+                            + " / "
+                            + ex.GetBaseException().Message);
+        }
+    }
+
 }
 
 public sealed record ReviewImportPreparationResult(
@@ -766,6 +925,28 @@ public sealed record ReviewImportExecutionResult(
     public static ReviewImportExecutionResult
         Failure(
             string message) =>
+        new(
+            false,
+            0,
+            message);
+}
+
+
+public sealed record PronunciationAssistMigrationExecutionResult(
+    bool IsSuccess,
+    int MigratedCount,
+    string? Message)
+{
+    public static PronunciationAssistMigrationExecutionResult Success(
+        int count,
+        string? message) =>
+        new(
+            true,
+            count,
+            message);
+
+    public static PronunciationAssistMigrationExecutionResult Failure(
+        string message) =>
         new(
             false,
             0,

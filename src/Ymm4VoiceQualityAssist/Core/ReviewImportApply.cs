@@ -421,13 +421,13 @@ public static class ReviewImportApplier
 
         var transitions =
             new Dictionary<
-                PronunciationAssistEffect,
+                IPronunciationAssistSettings,
                 EffectTransition>(
                     ReferenceEqualityComparer.Instance);
 
         var decodedRules =
             new Dictionary<
-                PronunciationAssistEffect,
+                IPronunciationAssistSettings,
                 HelperRuleSet>(
                     ReferenceEqualityComparer.Instance);
 
@@ -528,7 +528,7 @@ public static class ReviewImportApplier
             }
         }
 
-        PronunciationAssistEffect? primary =
+        IPronunciationAssistSettings? primary =
             enabledEffects.FirstOrDefault();
 
         var requiresPrimary =
@@ -545,14 +545,8 @@ public static class ReviewImportApplier
             && primary is null)
         {
             primary =
-                new PronunciationAssistEffect
-                {
-                    IsEnabled = true,
-                    HelperRulesJson =
-                        string.Empty,
-                    Prosody =
-                        ProsodyGesture.None,
-                };
+                ReviewAssistEffectCollection
+                    .CreateCanonical();
 
             transitions.Add(
                 primary,
@@ -671,9 +665,9 @@ public static class ReviewImportApplier
     }
 
     static EffectTransition GetOrCreateTransition(
-        PronunciationAssistEffect effect,
+        IPronunciationAssistSettings effect,
         Dictionary<
-            PronunciationAssistEffect,
+            IPronunciationAssistSettings,
             EffectTransition> transitions,
         bool presentBefore)
     {
@@ -879,7 +873,7 @@ internal sealed record AssistEffectState(
 internal sealed class EffectTransition
 {
     public EffectTransition(
-        PronunciationAssistEffect effect,
+        IPronunciationAssistSettings effect,
         AssistEffectState before,
         AssistEffectState after)
     {
@@ -888,12 +882,12 @@ internal sealed class EffectTransition
         After = after;
     }
 
-    public PronunciationAssistEffect Effect { get; }
+    public IPronunciationAssistSettings Effect { get; }
     public AssistEffectState Before { get; }
     public AssistEffectState After { get; set; }
 
     public static EffectTransition ForNew(
-        PronunciationAssistEffect effect)
+        IPronunciationAssistSettings effect)
     {
         var absent =
             new AssistEffectState(

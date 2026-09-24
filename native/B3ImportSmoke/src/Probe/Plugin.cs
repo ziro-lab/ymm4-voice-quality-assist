@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Newtonsoft.Json.Linq;
 using Ymm4VoiceQualityAssist.Core;
+using Ymm4VoiceQualityAssist.Effects;
 using YukkuriMovieMaker.Plugin;
 using YukkuriMovieMaker.Plugin.Voice;
 using YukkuriMovieMaker.Project;
@@ -593,6 +594,24 @@ internal static class Probe
                         .Anchor.Position
                         == 2);
 
+                Check(
+                    "assist_new_write_uses_audio_effects",
+                    selected.AudioEffects
+                        .Cast<object>()
+                        .Any(x =>
+                            ReferenceEquals(
+                                x,
+                                effect)));
+
+                Check(
+                    "assist_new_write_skips_legacy_collection",
+                    !selected.JimakuVideoEffects
+                        .Cast<object>()
+                        .Any(x =>
+                            ReferenceEquals(
+                                x,
+                                effect)));
+
                 await WaitUntil(
                     "Track A regeneration after import",
                     () =>
@@ -760,12 +779,251 @@ internal static class Probe
                 manager.Redoed -=
                     redoedHandler;
             }
+
+            await RunLegacyMigrationLifecycleAsync(
+                timeline,
+                character,
+                parameter,
+                manager);
         }
         finally
         {
             registration.Restore();
         }
     }
+
+    static async Task RunLegacyMigrationLifecycleAsync(
+        Timeline timeline,
+        Character character,
+        IVoiceParameter parameter,
+        UndoRedoManager manager)
+    {
+        var voice =
+            CreateVoice(
+                character,
+                parameter,
+                "えええ",
+                "エエエ",
+                "B3_LEGACY_MIGRATION");
+
+        Check(
+            "migration_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                720,
+                7));
+
+        var rulesJson =
+            HelperRuleCodec.Encode(
+                new HelperRuleSet(
+                    HelperRuleSet.CurrentVersion,
+                    [
+                        HelperRuleFactory.Create(
+                            "えええ",
+                            1,
+                            "ウ",
+                            HelperMoraKind.ZeroVowel,
+                            contextLength: 1),
+                    ]));
+
+        var legacy =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = false,
+                HelperRulesJson = rulesJson,
+                Prosody = ProsodyGesture.Hold,
+            };
+
+        Check(
+            "migration_legacy_seeded",
+            ReviewAssistEffectCollection.TryAdd(
+                voice,
+                legacy,
+                out var seedError)
+            && seedError is null
+            && voice.JimakuVideoEffects
+                .Cast<object>()
+                .Any(x =>
+                    ReferenceEquals(
+                        x,
+                        legacy))
+            && !voice.AudioEffects
+                .Cast<object>()
+                .Any(x =>
+                    x is PronunciationAssistAudioEffect));
+
+        var prepared =
+            PronunciationAssistMigrationBatch.Prepare(
+                [voice]);
+
+        Check(
+            "migration_prepared",
+            prepared.IsReady
+            && prepared.Batch is not null
+            && prepared.Batch.ItemCount == 1);
+
+        var batch =
+            prepared.Batch
+            ?? throw new InvalidOperationException(
+                "Migration batch missing.");
+
+        manager.Record();
+
+        var recorded = 0;
+        var undoed = 0;
+        var redoed = 0;
+
+        EventHandler recordedHandler =
+            (_, _) => recorded++;
+
+        EventHandler undoedHandler =
+            (_, _) => undoed++;
+
+        EventHandler redoedHandler =
+            (_, _) => redoed++;
+
+        manager.Recorded += recordedHandler;
+        manager.Undoed += undoedHandler;
+        manager.Redoed += redoedHandler;
+
+        try
+        {
+            var commit =
+                batch.Commit();
+
+            Check(
+                "migration_committed_to_audio",
+                commit.IsSuccess
+                && ReviewAssistEffectCollection
+                    .Enumerate(voice)
+                    .Count == 1
+                && PronunciationAssistSettingsStore
+                    .EnumerateLegacy(voice)
+                    .Count == 0
+                && PronunciationAssistSettingsStore
+                    .EnumerateAudio(voice)
+                    .Count == 1);
+
+            var audio =
+                AssertSingleAudio(voice);
+
+            Check(
+                "migration_settings_exact",
+                !audio.IsEnabled
+                && string.Equals(
+                    audio.HelperRulesJson,
+                    rulesJson,
+                    StringComparison.Ordinal)
+                && audio.Prosody
+                    == ProsodyGesture.Hold
+                && voice.AudioEffects
+                    .Cast<object>()
+                    .Any(x =>
+                        ReferenceEquals(
+                            x,
+                            audio))
+                && !voice.JimakuVideoEffects
+                    .Cast<object>()
+                    .Any(x =>
+                        x is PronunciationAssistEffect));
+
+            manager.AddCommand(
+                new UndoRedoActionCommand(
+                    batch.UndoOrThrow,
+                    batch.RedoOrThrow));
+
+            manager.Record();
+
+            Check(
+                "migration_recorded_once",
+                recorded == 1);
+
+            await manager.UndoAsync();
+
+            Check(
+                "migration_undo_restores_legacy",
+                undoed == 1
+                && PronunciationAssistSettingsStore
+                    .EnumerateAudio(voice)
+                    .Count == 0
+                && ReferenceEquals(
+                    AssertSingleLegacy(voice),
+                    legacy)
+                && !legacy.IsEnabled
+                && string.Equals(
+                    legacy.HelperRulesJson,
+                    rulesJson,
+                    StringComparison.Ordinal)
+                && legacy.Prosody
+                    == ProsodyGesture.Hold);
+
+            await manager.RedoAsync();
+
+            var redone =
+                AssertSingleAudio(voice);
+
+            Check(
+                "migration_redo_restores_audio",
+                redoed == 1
+                && ReferenceEquals(
+                    redone,
+                    audio)
+                && PronunciationAssistSettingsStore
+                    .EnumerateLegacy(voice)
+                    .Count == 0
+                && !redone.IsEnabled
+                && string.Equals(
+                    redone.HelperRulesJson,
+                    rulesJson,
+                    StringComparison.Ordinal)
+                && redone.Prosody
+                    == ProsodyGesture.Hold);
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "migration-observation.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        recorded,
+                        undoed,
+                        redoed,
+                        storage = "AudioEffects",
+                        settings = new
+                        {
+                            redone.IsEnabled,
+                            redone.HelperRulesJson,
+                            prosody =
+                                redone.Prosody.ToString(),
+                        },
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        finally
+        {
+            manager.Recorded -= recordedHandler;
+            manager.Undoed -= undoedHandler;
+            manager.Redoed -= redoedHandler;
+        }
+    }
+
+    static PronunciationAssistAudioEffect
+        AssertSingleAudio(
+            VoiceItem voice) =>
+        PronunciationAssistSettingsStore
+            .EnumerateAudio(voice)
+            .Single();
+
+    static PronunciationAssistEffect
+        AssertSingleLegacy(
+            VoiceItem voice) =>
+        PronunciationAssistSettingsStore
+            .EnumerateLegacy(voice)
+            .Single();
 
     static VoiceItem CreateVoice(
         Character character,

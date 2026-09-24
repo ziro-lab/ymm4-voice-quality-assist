@@ -62,38 +62,28 @@ public static class SourceFingerprint
         var profiles =
             new List<SourceFingerprintAssistProfile>();
 
-        if (voice.JimakuVideoEffects
-            is IEnumerable effects)
+        foreach (var effect
+            in ReviewAssistEffectCollection
+                .Enumerate(voice)
+                .Where(x => x.IsEnabled))
         {
-            foreach (var value in effects)
+            if (!HelperRuleCodec.TryDecode(
+                effect.HelperRulesJson,
+                out var decoded,
+                out var decodeError))
             {
-                if (value
-                    is not PronunciationAssistEffect
-                    {
-                        IsEnabled: true,
-                    } effect)
-                {
-                    continue;
-                }
-
-                if (!HelperRuleCodec.TryDecode(
-                    effect.HelperRulesJson,
-                    out var decoded,
-                    out var decodeError))
-                {
-                    input = null;
-                    error =
-                        decodeError
-                        ?? "Enabled Assist Effect has invalid helper-rule JSON.";
-                    return false;
-                }
-
-                profiles.Add(
-                    new SourceFingerprintAssistProfile(
-                        effect.Prosody,
-                        CanonicalizeHelperRules(
-                            decoded.Rules)));
+                input = null;
+                error =
+                    decodeError
+                    ?? "Enabled Assist Effect has invalid helper-rule JSON.";
+                return false;
             }
+
+            profiles.Add(
+                new SourceFingerprintAssistProfile(
+                    effect.Prosody,
+                    CanonicalizeHelperRules(
+                        decoded.Rules)));
         }
 
         input = new SourceFingerprintInput(

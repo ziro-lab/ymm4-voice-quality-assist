@@ -65,6 +65,12 @@ try {
       Get-Content $observation
     }
 
+    $migrationObservation=Join-Path $OutputDir 'migration-observation.json'
+    if(Test-Path $migrationObservation){
+      Write-Output '--- legacy migration observation ---'
+      Get-Content $migrationObservation
+    }
+
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
     if(Test-Path $requestsPath){
       Write-Output '--- fake VOICEVOX requests ---'
@@ -101,12 +107,22 @@ try {
       'import_recorded_once',
       'durable_source_applied',
       'assist_effect_created',
+      'assist_new_write_uses_audio_effects',
+      'assist_new_write_skips_legacy_collection',
       'track_a_regenerated_corrected_audio',
       'stale_voice_not_applied',
       'undo_restores_durable_source',
       'undo_regenerates_baseline_audio',
       'redo_restores_durable_source',
-      'redo_regenerates_same_corrected_audio'
+      'redo_regenerates_same_corrected_audio',
+      'migration_voice_added',
+      'migration_legacy_seeded',
+      'migration_prepared',
+      'migration_committed_to_audio',
+      'migration_settings_exact',
+      'migration_recorded_once',
+      'migration_undo_restores_legacy',
+      'migration_redo_restores_audio'
     )
 
     if($r.requirements.Count-ne$required.Count){

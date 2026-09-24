@@ -8,7 +8,7 @@ using YukkuriMovieMaker.Plugin.Effects;
 namespace Ymm4VoiceQualityAssist.Effects;
 
 [VideoEffect("発音補助", ["音声", "発音補助"], [])]
-public sealed class PronunciationAssistEffect : VideoEffectBase
+public sealed class PronunciationAssistEffect : VideoEffectBase, IPronunciationAssistSettings
 {
     public override string Label => "発音補助";
 
