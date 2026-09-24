@@ -7,18 +7,11 @@ on:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/a1-zero-pause-mvp.yml'
-  push:
-    branches: ['feature/a1-zero-pause-mvp']
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - '.github/workflows/a1-zero-pause-mvp.yml'
-
 permissions:
   contents: read
 
 concurrency:
-  group: a1-zero-pause-mvp-${{ github.ref }}
+  group: a1-zero-pause-mvp-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
