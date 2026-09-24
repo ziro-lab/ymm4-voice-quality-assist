@@ -21,8 +21,6 @@ public sealed class PronunciationAssistController : IDisposable
     [
         nameof(VoiceItem.Serif),
         nameof(VoiceItem.Hatsuon),
-        nameof(VoiceItem.JimakuVideoEffects),
-        nameof(VoiceItem.AudioEffects),
         nameof(VoiceItem.Pronounce),
         nameof(VoiceItem.VoiceParameter),
         "Character",
@@ -186,13 +184,17 @@ public sealed class PronunciationAssistController : IDisposable
         if (string.IsNullOrEmpty(propertyName)
             || RelevantVoiceProperties.Contains(
                 propertyName,
-                StringComparer.Ordinal))
+                StringComparer.Ordinal)
+            || PronunciationAssistSettingsStore
+                .IsStorageCollectionProperty(
+                    propertyName))
         {
             state.SourceRevision++;
             if (propertyName == nameof(VoiceItem.VoiceParameter))
                 state.RefreshParameterSubscription();
-            if (propertyName is nameof(VoiceItem.JimakuVideoEffects)
-                or nameof(VoiceItem.AudioEffects))
+            if (PronunciationAssistSettingsStore
+                .IsStorageCollectionProperty(
+                    propertyName))
             {
                 state.RefreshEffectSubscriptions();
             }
