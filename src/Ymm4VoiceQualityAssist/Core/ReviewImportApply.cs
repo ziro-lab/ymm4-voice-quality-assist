@@ -94,6 +94,7 @@ public sealed class ReviewImportJournal
         }
         catch (Exception ex)
         {
+            var rollbackErrors = new List<string>();
             for (var index =
                     touched.Count - 1;
                  index >= 0;
@@ -104,17 +105,17 @@ public sealed class ReviewImportJournal
                     touched[index]
                         .ApplyBeforeOrThrow();
                 }
-                catch
+                catch (Exception rollbackError)
                 {
-                    // Best-effort rollback. The original apply error remains
-                    // the primary failure; native acceptance covers this path.
+                    rollbackErrors.Add(rollbackError.GetBaseException().Message);
                 }
             }
 
             return new ReviewImportCommitResult(
                 ReviewImportCommitStatus.ApplyFailed,
                 touched.LastOrDefault()?.ExportRef,
-                ex.GetBaseException().Message);
+                ex.GetBaseException().Message + (rollbackErrors.Count == 0 ? string.Empty
+                    : " Rollback was incomplete: " + string.Join("; ", rollbackErrors)));
         }
 
         committed = true;
@@ -162,7 +163,8 @@ public static class ReviewImportApplier
 {
     public static ReviewImportPrepareResult Prepare(
         ReviewImportPlan plan,
-        IReadOnlyCollection<string> selectedExportRefs)
+        IReadOnlyCollection<string> selectedExportRefs,
+        Func<VoiceItem, bool>? isCurrentTarget = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(
@@ -195,6 +197,7 @@ public static class ReviewImportApplier
                     .Target.ExportRef,
                 StringComparer.Ordinal);
 
+        var selectedTargets = new HashSet<VoiceItem>(ReferenceEqualityComparer.Instance);
         foreach (var exportRef in selected)
         {
             if (!byRef.TryGetValue(
@@ -216,6 +219,12 @@ public static class ReviewImportApplier
                     exportRef,
                     "Only exact resolved review items can be selected for apply.");
             }
+            if (!selectedTargets.Add(item.Target))
+                return Failure(ReviewImportPrepareStatus.InvalidSelection, exportRef,
+                    "More than one selected review record resolves to the same live VoiceItem.");
+            if (isCurrentTarget is not null && !isCurrentTarget(item.Target))
+                return Failure(ReviewImportPrepareStatus.InvalidSelection, exportRef,
+                    "The selected VoiceItem is no longer in the current Timeline.");
         }
 
         var prepared =
@@ -236,7 +245,8 @@ public static class ReviewImportApplier
             if (!TryPrepareChange(
                 item,
                 out var change,
-                out var error)
+                out var error,
+                isCurrentTarget)
                 || change is null)
             {
                 return Failure(
@@ -269,7 +279,8 @@ public static class ReviewImportApplier
     static bool TryPrepareChange(
         ReviewImportItem item,
         out PreparedVoiceChange? change,
-        out string? error)
+        out string? error,
+        Func<VoiceItem, bool>? isCurrentTarget)
     {
         change = null;
         error = null;
@@ -521,7 +532,9 @@ public static class ReviewImportApplier
             enabledEffects.FirstOrDefault();
 
         var requiresPrimary =
-            helperOperations.Length > 0
+            (boundaryOperations.OfType<AddBoundaryCorrection>().Any()
+                && afterBoundaries.Count > 0)
+            || helperOperations.Length > 0
             || (
                 prosodyOperation is not null
                 && prosodyOperation.Gesture
@@ -651,7 +664,8 @@ public static class ReviewImportApplier
                 beforeHatsuon,
                 afterHatsuon,
                 transitions.Values
-                    .ToArray());
+                    .ToArray(),
+                isCurrentTarget);
 
         return true;
     }
@@ -704,6 +718,7 @@ public static class ReviewImportApplier
 internal sealed class PreparedVoiceChange
 {
     readonly VoiceItem voice;
+    readonly Func<VoiceItem, bool>? isCurrentTarget;
     readonly string expectedFingerprint;
     readonly string? beforeSerif;
     readonly string? afterSerif;
@@ -719,7 +734,8 @@ internal sealed class PreparedVoiceChange
         string? afterSerif,
         string? beforeHatsuon,
         string? afterHatsuon,
-        IReadOnlyList<EffectTransition> effects)
+        IReadOnlyList<EffectTransition> effects,
+        Func<VoiceItem, bool>? isCurrentTarget)
     {
         ExportRef =
             exportRef
@@ -741,6 +757,7 @@ internal sealed class PreparedVoiceChange
         this.beforeHatsuon = beforeHatsuon;
         this.afterHatsuon = afterHatsuon;
         this.effects = effects;
+        this.isCurrentTarget = isCurrentTarget;
     }
 
     public string ExportRef { get; }
@@ -760,6 +777,11 @@ internal sealed class PreparedVoiceChange
     public bool MatchesBefore(
         out string? reason)
     {
+        if (isCurrentTarget is not null && !isCurrentTarget(voice))
+        {
+            reason = "The VoiceItem was removed or its Timeline is no longer current.";
+            return false;
+        }
         if (!SourceFingerprint.TryCreate(
             voice,
             out var fingerprint,

@@ -2,6 +2,8 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using Ymm4VoiceQualityAssist.Runtime;
 using Microsoft.Win32;
 using Ymm4VoiceQualityAssist.Core;
 using YukkuriMovieMaker.Plugin;
@@ -112,6 +114,14 @@ public sealed class PronunciationAssistToolView : UserControl
             Margin = new Thickness(0, 10, 0, 0),
         };
 
+        var runtimeStatus = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        runtimeStatus.SetBinding(TextBlock.TextProperty, new Binding(nameof(AssistRuntimeStatus.Message))
+        { Source = AssistRuntimeStatus.Current });
+
         Content = new StackPanel
         {
             Margin = new Thickness(12),
@@ -124,6 +134,7 @@ public sealed class PronunciationAssistToolView : UserControl
                 llmPromptExportButton,
                 importButton,
                 status,
+                runtimeStatus,
             },
         };
     }
@@ -161,6 +172,9 @@ public sealed class PronunciationAssistToolView : UserControl
                     "インポートをキャンセルしました。";
                 return;
             }
+
+            if (new FileInfo(correctionDialog.FileName).Length > 8 * 1024 * 1024)
+                throw new InvalidDataException("レビュー結果JSONは8 MiB以下に分割してください。");
 
             var correctionJson =
                 await File.ReadAllTextAsync(
@@ -224,6 +238,9 @@ public sealed class PronunciationAssistToolView : UserControl
                         "元のVoice Review JSONが必要です。";
                     return;
                 }
+
+                if (new FileInfo(sourceDialog.FileName).Length > 8 * 1024 * 1024)
+                    throw new InvalidDataException("元のレビューJSONが8 MiBを超えています。");
 
                 var sourceJson =
                     await File.ReadAllTextAsync(
@@ -428,13 +445,30 @@ public sealed class PronunciationAssistToolView : UserControl
                         nameof(format)),
             };
 
-            await File.WriteAllTextAsync(
-                dialog.FileName,
-                text,
-                new UTF8Encoding(
-                    encoderShouldEmitUTF8Identifier:
-                        format
-                        == ReviewExportFileFormat.Csv));
+            string? sourceSidecar = null;
+            if (format == ReviewExportFileFormat.LlmPrompt)
+            {
+                sourceSidecar = Path.Combine(Path.GetDirectoryName(dialog.FileName)!,
+                    Path.GetFileNameWithoutExtension(dialog.FileName) + ".review-"
+                    + prepared.Session.Package.ExportSessionId + ".json");
+                // A unique session-qualified sidecar never overwrites an unrelated export.
+                await using var stream = new FileStream(sourceSidecar, FileMode.CreateNew, FileAccess.Write);
+                var bytes = new UTF8Encoding(false).GetBytes(ReviewExportJson.Serialize(prepared.Session.Package));
+                await stream.WriteAsync(bytes);
+            }
+            try
+            {
+                await File.WriteAllTextAsync(dialog.FileName, text,
+                    new UTF8Encoding(format == ReviewExportFileFormat.Csv));
+            }
+            catch
+            {
+                if (sourceSidecar is not null)
+                {
+                    try { File.Delete(sourceSidecar); } catch (IOException) { }
+                }
+                throw;
+            }
 
             viewModel.CommitReviewExport(
                 prepared.Session);
@@ -455,7 +489,8 @@ public sealed class PronunciationAssistToolView : UserControl
                 $"{prepared.Session.Package.Voices.Count}件のVoiceItemを"
                 + formatLabel
                 + "へ書き出しました。\n"
-                + dialog.FileName;
+                + dialog.FileName
+                + (sourceSidecar is null ? string.Empty : "\n再起動後のImport用JSON: " + sourceSidecar);
         }
         catch (Exception ex)
         {
@@ -626,10 +661,12 @@ public sealed class PronunciationAssistToolViewModel :
                     "YMM4のUndoRedoManagerを取得できませんでした。");
         }
 
-        var prepared =
-            ReviewImportApplier.Prepare(
-                plan,
-                selectedExportRefs);
+        var currentTimeline = timeline;
+        if (currentTimeline is null)
+            return ReviewImportExecutionResult.Failure("対象のTimelineが閉じられました。");
+        var prepared = ReviewImportApplier.Prepare(plan, selectedExportRefs,
+            voice => ReferenceEquals(timeline, currentTimeline)
+                && currentTimeline.Items.Any(x => ReferenceEquals(x, voice)));
 
         if (!prepared.IsSuccess
             || prepared.Journal is null)
@@ -680,18 +717,13 @@ public sealed class PronunciationAssistToolViewModel :
         }
         catch (Exception ex)
         {
-            try
-            {
-                journal.UndoOrThrow();
-            }
-            catch
-            {
-            }
-
-            return ReviewImportExecutionResult
-                .Failure(
-                    "Undo履歴への登録に失敗したため変更を戻しました: "
-                    + ex.GetBaseException().Message);
+            string? rollbackError = null;
+            try { journal.UndoOrThrow(); }
+            catch (Exception rollback) { rollbackError = rollback.GetBaseException().Message; }
+            return ReviewImportExecutionResult.Failure(
+                (rollbackError is null ? "履歴登録に失敗し、変更を戻しました: "
+                    : "履歴登録と復旧に失敗しました。上書き保存せず、対象を確認してください: " + rollbackError + " / ")
+                + ex.GetBaseException().Message);
         }
     }
 }

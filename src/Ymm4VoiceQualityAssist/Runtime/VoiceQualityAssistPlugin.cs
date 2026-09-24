@@ -33,8 +33,15 @@ internal static class VoiceQualityAssistModule
 {
 #pragma warning disable CA2255 // Intentional plugin assembly bootstrap.
     [ModuleInitializer]
-    internal static void Initialize() =>
-        VoiceQualityAssistRuntime.Start();
+    internal static void Initialize()
+    {
+        try { VoiceQualityAssistRuntime.Start(); }
+        catch (Exception ex)
+        {
+            AssistRuntimeStatus.Current.Report("STARTUP_FAILED",
+                "発音補助を起動できません。YMM4側の依存関係を確認してください: " + ex.GetBaseException().Message);
+        }
+    }
 #pragma warning restore CA2255
 }
 
@@ -75,6 +82,12 @@ internal static class VoiceQualityAssistRuntime
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null)
             return false;
+        if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+        {
+            startupTimer?.Dispose();
+            startupTimer = null;
+            return true;
+        }
 
         startupTimer?.Dispose();
         startupTimer = null;
@@ -174,9 +187,18 @@ internal static class VoiceQualityAssistRuntime
             BindingFlags.Instance | BindingFlags.Public);
 
         if (property?.GetMethod?.IsPublic != true)
+        {
+            AssistRuntimeStatus.Current.Report("HOST_INCOMPATIBLE",
+                "YMM4の依存関係が変わったため、自動発音補助を利用できません（ActiveTimelineViewModel）。");
             return null;
-
-        return property.GetValue(main) as TimelineViewModel;
+        }
+        try { return property.GetValue(main) as TimelineViewModel; }
+        catch (Exception ex)
+        {
+            AssistRuntimeStatus.Current.Report("HOST_INCOMPATIBLE",
+                "YMM4のタイムライン情報を取得できないため、自動補助を保留しています: " + ex.GetBaseException().Message);
+            return null;
+        }
     }
 
     static void AttachTimeline(
@@ -191,8 +213,16 @@ internal static class VoiceQualityAssistRuntime
 
         if (timelineViewModel is not null)
         {
-            controller = new PronunciationAssistController(
-                timelineViewModel);
+            try
+            {
+                controller = new PronunciationAssistController(timelineViewModel);
+                AssistRuntimeStatus.Current.Report("READY", "発音補助を監視しています。無効・未設定のアイテムは変更しません。");
+            }
+            catch (Exception ex)
+            {
+                AssistRuntimeStatus.Current.Report("HOST_INCOMPATIBLE",
+                    "このYMM4の依存関係では自動補助を開始できません: " + ex.GetBaseException().Message);
+            }
         }
     }
 

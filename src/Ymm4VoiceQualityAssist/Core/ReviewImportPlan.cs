@@ -80,10 +80,11 @@ public static class ReviewImportPlanner
                 "Correction package must pass B2 wire and export validation before import planning.");
         }
 
-        var byRef =
-            exportPackage.Voices.ToDictionary(
-                x => x.Target.ExportRef,
-                StringComparer.Ordinal);
+        corrections = ReviewCorrectionJson.DecodeAndValidateAgainstExport(
+            ReviewCorrectionJson.Serialize(corrections.WirePackage), exportPackage);
+        if (!corrections.IsSuccess)
+            return new ReviewImportPlan(ReviewImportBuildStatus.InvalidCorrectionPackage, [],
+                "Correction records do not match the supplied review export.");
 
         var proposals =
             corrections.Proposals.ToDictionary(
@@ -124,17 +125,16 @@ public static class ReviewImportPlanner
                     + ".");
             }
 
-            if (canUseLiveSession
-                && liveSession!.LiveTargets.TryGetValue(
-                    record.Target.ExportRef,
-                    out var live)
-                && currentSet.Contains(live))
+            if (canUseLiveSession)
             {
-                items.Add(
-                    BuildSameSessionItem(
-                        record,
-                        proposal,
-                        live));
+                // A removed live target must not silently rebind to an identical clone.
+                if (liveSession!.LiveTargets.TryGetValue(record.Target.ExportRef, out var live)
+                    && currentSet.Contains(live))
+                    items.Add(BuildSameSessionItem(record, proposal, live));
+                else
+                    items.Add(new ReviewImportItem(record, proposal,
+                        ReviewImportResolutionStatus.Missing, null, null, false,
+                        "The exported live VoiceItem is no longer in this Timeline."));
                 continue;
             }
 

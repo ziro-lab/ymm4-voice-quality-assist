@@ -1,0 +1,110 @@
+name: Candidate package
+
+on:
+  pull_request:
+    branches: ['feature/shared-correction-model-v0']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vqa-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Snapshot exact source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force out/source | Out-Null
+          git archive --format=zip --output=out/source/source.zip HEAD
+          if($LASTEXITCODE -ne 0){ throw 'Source archive failed' }
+          git rev-parse HEAD | Set-Content out/source/source-head.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-source
+          path: out/source/
+          retention-days: 7
+      - name: Prepare pinned YMM4
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          curl.exe -L --fail --retry 2 --silent --show-error -o ymm4.zip https://github.com/manju-summoner/YukkuriMovieMaker4/releases/download/v4.56.1.0/YukkuriMovieMaker_v4.56.1.0_Lite.zip
+          if($LASTEXITCODE -ne 0){ throw 'Host download failed' }
+          $hash=(Get-FileHash ymm4.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($hash -ne '49c0ed689f545737b7ce939971bfc625962e00791c57883dc8e6f058aa336c5a'){ throw 'Host hash mismatch' }
+          Expand-Archive ymm4.zip ymm4
+          $exe=Get-ChildItem ymm4 -Recurse -Filter YukkuriMovieMaker.exe | Select-Object -First 1
+          if($null -eq $exe){ throw 'Host executable missing' }
+          "YMM4_DIR=$($exe.Directory.FullName)\" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build and test candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/Ymm4VoiceQualityAssist/Ymm4VoiceQualityAssist.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" -p:Version=0.1.0-candidate.1 -o out/product --nologo -warnaserror
+          if($LASTEXITCODE -ne 0){ throw 'Product build failed' }
+          dotnet test tests/Ymm4VoiceQualityAssist.Tests/Ymm4VoiceQualityAssist.Tests.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" --nologo --logger 'trx;LogFileName=tests.trx' --results-directory out/tests
+          if($LASTEXITCODE -ne 0){ throw 'Tests failed' }
+      - name: Native tests on the candidate DLL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $env:GITHUB_SHA=(git rev-parse HEAD).Trim()
+          $product=(Resolve-Path out/product).Path + [IO.Path]::DirectorySeparatorChar
+          foreach($suite in @('A1Smoke','A2HelperSmoke','A3ProsodySmoke','B3ImportSmoke')){
+            $probe=Join-Path $PWD "out/probes/$suite"
+            $evidence=Join-Path $PWD "out/native/$suite"
+            dotnet build "native/$suite/src/Probe/Probe.csproj" -c Release "-p:YMM4DirPath=$env:YMM4_DIR" "-p:ProductDirPath=$product" -o $probe --nologo -warnaserror
+            if($LASTEXITCODE -ne 0){ throw "Probe build failed: $suite" }
+            $userDir=Join-Path $env:YMM4_DIR 'user'
+            if(Test-Path $userDir){ Remove-Item $userDir -Recurse -Force }
+            & "./native/$suite/RunNative.ps1" -Ymm4Dir $env:YMM4_DIR -ProductDir $product -ProbeDir $probe -OutputDir $evidence
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: candidate-native-evidence
+          path: out/native/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Package only product files
+        if: ${{ hashFiles('docs/CANDIDATE_GUIDE_JA.md') != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $head=(git rev-parse HEAD).Trim()
+          $root='out/package/Ymm4VoiceQualityAssist'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Copy-Item out/product/Ymm4VoiceQualityAssist.dll $root
+          Copy-Item docs/CANDIDATE_GUIDE_JA.md "$root/README_JA.md"
+          if(Test-Path docs/COMPATIBILITY.md){ Copy-Item docs/COMPATIBILITY.md $root }
+          $dllHash=(Get-FileHash "$root/Ymm4VoiceQualityAssist.dll" -Algorithm SHA256).Hash.ToLowerInvariant()
+          @{schema='vqa.candidate-manifest.v1';version='0.1.0-candidate.1';sourceHead=$head;runId=$env:GITHUB_RUN_ID;testedHost='4.56.1.0 Lite';dllSha256=$dllHash;releaseReady=$false} | ConvertTo-Json | Set-Content "$root/manifest.json" -Encoding utf8
+          if(@(Get-ChildItem $root -Filter '*.dll').Count -ne 1){ throw 'Unexpected bundled assembly' }
+          New-Item -ItemType Directory -Force out/dist | Out-Null
+          $zip="out/dist/Ymm4VoiceQualityAssist-0.1.0-candidate.1-$($head.Substring(0,8)).zip"
+          Compress-Archive -Path $root -DestinationPath $zip
+          (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content "$zip.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: candidate-test-results
+          path: out/tests/
+          if-no-files-found: warn
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ success() && hashFiles('out/dist/*.zip') != '' }}
+        with:
+          name: voice-quality-assist-candidate
+          path: out/dist/
+          retention-days: 7
