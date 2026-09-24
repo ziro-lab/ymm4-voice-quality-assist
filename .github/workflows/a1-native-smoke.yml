@@ -1,0 +1,80 @@
+name: A1 Native Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'native/A1Smoke/**'
+      - '.github/workflows/a1-native-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a1-native-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Prepare pinned YMM4 4.56.1.0 Lite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          curl.exe -L --fail --retry 2 --silent --show-error -o ymm4.zip https://github.com/manju-summoner/YukkuriMovieMaker4/releases/download/v4.56.1.0/YukkuriMovieMaker_v4.56.1.0_Lite.zip
+          if($LASTEXITCODE-ne0){throw 'YMM4 download failed'}
+          $expected='49c0ed689f545737b7ce939971bfc625962e00791c57883dc8e6f058aa336c5a'
+          $actual=(Get-FileHash ymm4.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($actual-ne$expected){throw "YMM4 hash mismatch: $actual"}
+          Expand-Archive ymm4.zip ymm4
+          $exe=Get-ChildItem ymm4 -Recurse -Filter YukkuriMovieMaker.exe|Select-Object -First 1
+          if($null-eq$exe){throw 'YMM4 executable not found'}
+          "YMM4_DIR=$($exe.Directory.FullName)\"|Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build product
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/product|Out-Null
+          dotnet build src/Ymm4VoiceQualityAssist/Ymm4VoiceQualityAssist.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" -o out/product --nologo -warnaserror
+          if($LASTEXITCODE-ne0){throw 'Product build failed'}
+
+      - name: Build native probe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/probe|Out-Null
+          dotnet build native/A1Smoke/src/Probe/Probe.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" -o out/probe --nologo -warnaserror
+          if($LASTEXITCODE-ne0){throw 'Native probe build failed'}
+
+      - name: Run real YMM4 product lifecycle
+        shell: pwsh
+        run: |
+          ./native/A1Smoke/RunNative.ps1 -Ymm4Dir $env:YMM4_DIR -ProductDir (Join-Path $PWD 'out/product') -ProbeDir (Join-Path $PWD 'out/probe') -OutputDir (Join-Path $PWD 'out/evidence')
+
+      - name: Provenance
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/evidence|Out-Null
+          @{
+            source_head=$env:GITHUB_SHA
+            run_id=$env:GITHUB_RUN_ID
+            host='4.56.1.0 Lite'
+            host_sha256='49c0ed689f545737b7ce939971bfc625962e00791c57883dc8e6f058aa336c5a'
+          }|ConvertTo-Json|Set-Content out/evidence/provenance.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: a1-product-native-smoke
+          path: out/evidence/
+          if-no-files-found: error
+          retention-days: 7

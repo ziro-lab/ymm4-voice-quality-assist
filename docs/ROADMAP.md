@@ -33,26 +33,36 @@
 
 - [ ] 実機スピーカーで補正直後のプレビュー音声を知覚確認（CIでは物理音声出力を証明しない）
 
-### A1. Zero-pause boundary MVP
+### A1. Zero-pause boundary MVP — CLOSED / PRODUCT NATIVE GREEN
 
-- [ ] Assist Effect
-- [ ] VoiceItem observer/controller
-- [ ] `<w0>` boundary extraction
+- [x] Assist Effect
+- [x] VoiceItem observer/controller（Toolを開かず自動runtime起動）
+- [x] `<w0>` boundary extraction
 - [x] boundary → target AccentPhrase mapping mechanism（same-speaker reading prefix → unique cumulative Mora.Text phrase-end）
 - [x] same-speaker reading resolver route（public `ConvertKanjiToYomiAsync`、exact match時のみ適用）
-- [ ] resolver product implementation + fail-closed unit coverage
-- [ ] target PauseMora duration = 0
-- [ ] regeneration reapply
-- [ ] no-op when Effect is absent/disabled
+- [x] resolver product implementation + fail-closed unit coverage（13/13 PASS）
+- [x] target PauseMora duration = 0
+- [x] regeneration reapply（disable/re-enable、marker remove/restore、Hatsuon変更）
+- [x] no-op / baseline restoration when Effect is absent or disabled
 
-### A2. Helper mora
+Product native evidence:
 
-- [ ] hidden/helper authoring representationを決める
-- [ ] helper vowel duration = 0
-- [ ] helper consonant duration = 0
-- [ ] regeneration reapply
-- [ ] subtitle表示との整合
-- [ ] helper位置の安全な再解決
+- run `35961051326`
+- job `107509502673`
+- source `601d3ad4736d9a21a0c75a00042f6169ea42e542`
+- artifact `10792103203`
+- artifact SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
+
+### A2. Helper mora — MECHANISM PROVEN / PRODUCT IMPLEMENTATION NEXT
+
+- [x] helperをSerif/Hatsuonへ永続挿入しない方針（Assist Effect設定 → transient augmented reading）
+- [x] helper vowel duration = 0（Lab #140）
+- [x] helper consonant duration = 0 + helper vowel維持（Lab #140）
+- [x] subtitle/通常Hatsuonを変更せず実VoiceItemへ合成可能（Lab #140）
+- [ ] durable helper rule schema / codec
+- [ ] helper anchorの安全な再解決（source text変更時）
+- [ ] regeneration / save-reload product reapply
+- [ ] A2 product-native smoke
 
 ### A3. Optional prosody assist
 
