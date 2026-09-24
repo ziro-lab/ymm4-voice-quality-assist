@@ -23,6 +23,8 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 
 | [PR #136 — <w0> real VoiceItem voice path](https://github.com/ziro-lab/chat-native-work-lab-001/pull/136) | Serif-only `<w0>`はofficial parserではclean-text boundaryとして解決されるが、baselineと同じVOICEVOX HTTP/Pronounce生成構造になり自動AccentPhrase境界化されない。Hatsuonへliteral `<w0>`を入れるとそのままVOICEVOXへ渡るため不採用。 | A1 semantic resolverは別途必要。 |
 
+| [PR #137 — Same-speaker reading prefix resolver](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137) | public `ConvertKanjiToYomiAsync`はbuilt-in VOICEVOX speakerで`/audio_query?text=...`を使い、full/prefix readingを返す。normalized prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付け、PauseMora存在まで確認。 | 実文ごとのprefix安定性は保証せず、exact per-item validationでfail closed。 |
+
 ## Current evidence chain
 
 現時点で、次の部品は実ホスト上でつながっています。
