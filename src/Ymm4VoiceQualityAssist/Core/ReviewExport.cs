@@ -48,6 +48,10 @@ public sealed record ReviewVoiceAssistSettings(
     bool Enabled,
     IReadOnlyList<SourceFingerprintAssistProfile> Profiles);
 
+public sealed record ReviewExportSession(
+    ReviewExportPackage Package,
+    IReadOnlyDictionary<string, VoiceItem> LiveTargets);
+
 public enum ReviewExportBuildStatus
 {
     Success,
@@ -57,19 +61,22 @@ public enum ReviewExportBuildStatus
 
 public sealed record ReviewExportBuildResult(
     ReviewExportBuildStatus Status,
-    ReviewExportPackage? Package,
+    ReviewExportSession? Session,
     int? FailedExportIndex,
     string? Message)
 {
     public bool IsSuccess =>
         Status == ReviewExportBuildStatus.Success
-        && Package is not null;
+        && Session is not null;
+
+    public ReviewExportPackage? Package =>
+        Session?.Package;
 
     public static ReviewExportBuildResult Success(
-        ReviewExportPackage package) =>
+        ReviewExportSession session) =>
         new(
             ReviewExportBuildStatus.Success,
-            package,
+            session,
             null,
             null);
 
@@ -243,12 +250,23 @@ public static class ReviewExportBuilder
                             .ToArray()));
         }
 
-        return ReviewExportBuildResult.Success(
+        var package =
             new ReviewExportPackage(
                 Schema,
                 exportSessionId,
                 exportedAt.ToUniversalTime(),
-                records));
+                records);
+
+        var liveTargets =
+            materialized.ToDictionary(
+                x => $"voice-{x.ExportIndex:D6}",
+                x => x.Voice,
+                StringComparer.Ordinal);
+
+        return ReviewExportBuildResult.Success(
+            new ReviewExportSession(
+                package,
+                liveTargets));
     }
 }
 
