@@ -349,4 +349,159 @@ public sealed class PronunciationAssistSettingsStoreTests
             after.CanonicalJson);
     }
 
+
+    [Fact]
+    public void MigrationBatch_MigratesMultipleVoicesAsOneUndoableUnit()
+    {
+        var first = new VoiceItem();
+        var second = new VoiceItem();
+
+        var firstLegacy =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = true,
+                Prosody = ProsodyGesture.LightRise,
+            };
+
+        var secondLegacy =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = false,
+                HelperRulesJson = "second-rules",
+                Prosody = ProsodyGesture.Hold,
+            };
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                first,
+                firstLegacy,
+                out var firstError),
+            firstError);
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                second,
+                secondLegacy,
+                out var secondError),
+            secondError);
+
+        var prepared =
+            PronunciationAssistMigrationBatch.Prepare(
+                [first, second]);
+
+        Assert.True(
+            prepared.IsReady,
+            prepared.Message);
+
+        var batch =
+            prepared.Batch!;
+
+        Assert.Equal(
+            2,
+            batch.ItemCount);
+
+        Assert.True(
+            batch.Commit().IsSuccess);
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateLegacy(first));
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateLegacy(second));
+
+        Assert.Single(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(first));
+
+        Assert.Single(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(second));
+
+        batch.UndoOrThrow();
+
+        Assert.Same(
+            firstLegacy,
+            Assert.Single(
+                PronunciationAssistSettingsStore
+                    .EnumerateLegacy(first)));
+
+        Assert.Same(
+            secondLegacy,
+            Assert.Single(
+                PronunciationAssistSettingsStore
+                    .EnumerateLegacy(second)));
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(first));
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(second));
+
+        batch.RedoOrThrow();
+
+        Assert.Single(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(first));
+
+        Assert.Single(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(second));
+    }
+
+    [Fact]
+    public void MigrationBatch_MixedStorage_BlocksWithoutMutation()
+    {
+        var legacyOnly = new VoiceItem();
+        var mixed = new VoiceItem();
+
+        var legacy =
+            new PronunciationAssistEffect();
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                legacyOnly,
+                legacy,
+                out var legacyError),
+            legacyError);
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                mixed,
+                new PronunciationAssistEffect(),
+                out var mixedLegacyError),
+            mixedLegacyError);
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                mixed,
+                new PronunciationAssistAudioEffect(),
+                out var mixedAudioError),
+            mixedAudioError);
+
+        var prepared =
+            PronunciationAssistMigrationBatch.Prepare(
+                [legacyOnly, mixed]);
+
+        Assert.False(
+            prepared.IsReady);
+
+        Assert.Equal(
+            PronunciationAssistMigrationBatchPrepareStatus.Blocked,
+            prepared.Status);
+
+        Assert.Same(
+            legacy,
+            Assert.Single(
+                PronunciationAssistSettingsStore
+                    .EnumerateLegacy(legacyOnly)));
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(legacyOnly));
+    }
+
 }
