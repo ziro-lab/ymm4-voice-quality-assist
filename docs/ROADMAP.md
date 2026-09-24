@@ -162,15 +162,32 @@ Non-blocking hands-on:
 
 XLSXは必須ではなく、CSVでhuman-readable viewを満たす。必要なら後続で追加する。
 
-### B2. LLM review workflow
+### B2. LLM review workflow — CLOSED / UNIT + REGRESSION GREEN
 
-- [ ] 読み候補
-- [ ] 固有名詞
-- [ ] 句境界候補
-- [ ] helper mora候補
-- [ ] optional prosody direction
-- [ ] structured correction only
-- [ ] no direct project mutation in first version
+- [x] 読み候補 → `setReading`
+- [x] 固有名詞 / 技術語の読み確認 → `setReading`
+- [x] 句境界候補 → `addBoundary` / `removeBoundary`
+- [x] helper mora候補 → `helperVowelZero` / `helperConsonantZero`
+- [x] optional prosody direction → `none / lightRise / lightFall / hold`
+- [x] structured correction only
+- [x] no direct project mutation in B2
+- [x] deterministic LLM review prompt生成
+- [x] `ymm4.voice-corrections.v0` wire codec
+- [x] wire operation → B0 typed correction conversion
+- [x] exportSessionId / exportRef / sourceFingerprint照合
+- [x] 全Voice exactly-one coverage要求（変更なしは明示的 `noChange`）
+- [x] B0 domain validationをwire decode後にも適用
+- [x] ToolからLLMレビュー用prompt fileを書き出し
+
+B2 final verification:
+
+- source `9fde8e810fedbbd58fc5078be78b201e89d299f9`
+- normal build/unit run `35986180201`: 91/91 PASS / 0 warnings / 0 errors
+- A1 native regression `35986180608`: GREEN
+- A2 native regression `35986180270`: GREEN
+- A3 native regression `35986180221`: GREEN
+
+B2はproposal生成・検証まで。現在Timelineへの再解決、before/after diff、選択、apply、UndoはB3へ分離する。
 
 ### B3. Import / Review
 
