@@ -348,7 +348,8 @@ public sealed record ReviewTargetCandidate<T>(
     int Layer,
     string? CharacterName,
     string? PreviousSerif,
-    string? NextSerif);
+    string? NextSerif)
+    where T : class;
 
 public enum ReviewTargetResolutionStatus
 {
@@ -363,6 +364,7 @@ public sealed record ReviewTargetResolution<T>(
     T? Item,
     int CandidateCount,
     string? Message)
+    where T : class
 {
     public bool CanAutoApply =>
         Status
@@ -379,6 +381,7 @@ public static class ReviewTargetResolver
             IReadOnlyList<
                 ReviewTargetCandidate<T>>
                 candidates)
+        where T : class
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(
             expectedFingerprint);
@@ -453,6 +456,7 @@ public static class ReviewTargetResolver
     static bool MatchesLocator<T>(
         ReviewTargetCandidate<T> candidate,
         ReviewTargetLocator locator)
+        where T : class
     {
         if (locator.Frame is { } frame
             && candidate.Frame != frame)
