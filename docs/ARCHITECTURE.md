@@ -434,6 +434,61 @@ native run `35961051326` で、Toolを開かない状態から自動runtimeが�
 
 のいずれかではControllerをattachせず、project/audioを変更しません。
 
+## 5.8 Helper mora transient synthesis — mechanism proven
+
+Lab PR #140で、helper kanaをVoiceItemのSerif/Hatsuonへ永続挿入せず、**VOICEVOX解析時のtransient readingだけへ挿入**できることを確認しました。
+
+```text
+durable helper rule
+      ↓
+current sourceへanchor再解決
+      ↓
+baseline reading上の挿入境界
+      ↓
+transient augmented reading
+      ↓
+public VOICEVOX analysis
+      ↓
+inserted helper Moraを一意に特定
+      ↓
+target duration component = 0
+      ↓
+public synthesis
+      ↓
+real VoiceItem.FilePath
+```
+
+検証では、persisted `Serif=えええ` / `Hatsuon=エエエ` を変更せずtransient `エウエウエ`を解析し、helper `ウ`の`vowel_length=0`を実`/synthesis`へ送信しました。またpersisted `Serif=ええ` / `Hatsuon=エエ`のままtransient `エセエ`を解析し、helper `セ`の`consonant_length=0` while `vowel_length=0.12` preserved を実`/synthesis`まで確認しました。
+
+したがってA2のhelper指定はSerif/Hatsuon rewritingではなく、Assist Effect側のdurable設定として保持します。生成済みaugmented reading / Pronounce / WAVはA1と同じくderived runtime stateです。
+
+### Helper rule persistence candidate
+
+A2 MVPはPR #131で既にsave/reload実証済みの**Effect string setting**を再利用し、version付きJSONをcanonical durable representationにします。これによりYMM4固有の新しいcollection serializer挙動を追加前提にしません。
+
+概念形:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {
+      "kind": "zeroVowel",
+      "helper": "ウ",
+      "anchor": {
+        "position": 1,
+        "left": "…",
+        "right": "…"
+      }
+    }
+  ]
+}
+```
+
+`position`はfast path、`left/right`はsource編集後の再位置決め用です。現在Serifでexact positionがまだ文脈一致する場合はそのまま使い、ずれた場合のみcontextから一意候補を探索します。候補0件または複数件ならfail closedし、helperを挿入しません。
+
+anchorをbaseline readingへ写像する際はA1と同じsame-speaker prefix readingを利用し、Serif文字indexをmora indexとして直接扱いません。
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
