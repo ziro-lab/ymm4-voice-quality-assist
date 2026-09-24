@@ -22,8 +22,7 @@ public sealed class PronunciationAssistToolView : UserControl
     {
         Content = new TextBlock
         {
-            Text = "Voice Quality Assist
-<w0> がある発音補助アイテムを監視します。",
+            Text = "Voice Quality Assist\n<w0> がある発音補助アイテムを監視します。",
             Margin = new Thickness(12),
             TextWrapping = TextWrapping.Wrap,
         };
