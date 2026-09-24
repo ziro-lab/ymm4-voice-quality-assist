@@ -23,8 +23,15 @@ public sealed class PronunciationAssistToolPlugin : IToolPlugin
 
 public sealed class PronunciationAssistToolView : UserControl
 {
+    enum ReviewExportFileFormat
+    {
+        Json,
+        Csv,
+    }
+
     readonly TextBlock status;
-    readonly Button exportButton;
+    readonly Button jsonExportButton;
+    readonly Button csvExportButton;
 
     public PronunciationAssistToolView()
     {
@@ -39,19 +46,35 @@ public sealed class PronunciationAssistToolView : UserControl
         {
             Text =
                 "発音補助のバックグラウンド監視は自動で動作します。\n"
-                + "Voice Review JSONでは、現在のボイス一覧をLLM/手動レビュー用に書き出せます。",
+                + "Voice Reviewは、JSONを正本としてLLM/Import用に、CSVを人間向け閲覧用に書き出せます。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
         };
 
-        exportButton = new Button
+        jsonExportButton = new Button
         {
             Content = "Voice Review JSONをエクスポート",
             Padding = new Thickness(10, 6, 10, 6),
             HorizontalAlignment = HorizontalAlignment.Left,
-            MinWidth = 220,
+            MinWidth = 230,
+            Margin = new Thickness(0, 0, 0, 6),
         };
-        exportButton.Click += OnExportClick;
+        jsonExportButton.Click +=
+            async (_, _) =>
+                await ExportAsync(
+                    ReviewExportFileFormat.Json);
+
+        csvExportButton = new Button
+        {
+            Content = "閲覧用CSVをエクスポート",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 230,
+        };
+        csvExportButton.Click +=
+            async (_, _) =>
+                await ExportAsync(
+                    ReviewExportFileFormat.Csv);
 
         status = new TextBlock
         {
@@ -67,15 +90,15 @@ public sealed class PronunciationAssistToolView : UserControl
             {
                 title,
                 description,
-                exportButton,
+                jsonExportButton,
+                csvExportButton,
                 status,
             },
         };
     }
 
-    async void OnExportClick(
-        object sender,
-        RoutedEventArgs e)
+    async Task ExportAsync(
+        ReviewExportFileFormat format)
     {
         if (DataContext
             is not PronunciationAssistToolViewModel viewModel)
@@ -85,7 +108,7 @@ public sealed class PronunciationAssistToolView : UserControl
             return;
         }
 
-        exportButton.IsEnabled = false;
+        SetExportButtonsEnabled(false);
 
         try
         {
@@ -100,7 +123,7 @@ public sealed class PronunciationAssistToolView : UserControl
             {
                 status.Text =
                     prepared.Message
-                    ?? "Voice Review JSONを作成できませんでした。";
+                    ?? "Voice Reviewデータを作成できませんでした。";
                 return;
             }
 
@@ -111,18 +134,28 @@ public sealed class PronunciationAssistToolView : UserControl
                 return;
             }
 
+            var isJson =
+                format == ReviewExportFileFormat.Json;
+
             var dialog = new SaveFileDialog
             {
-                Title = "Voice Review JSONを保存",
-                Filter =
-                    "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*",
-                DefaultExt = ".json",
+                Title = isJson
+                    ? "Voice Review JSONを保存"
+                    : "Voice Review CSVを保存",
+                Filter = isJson
+                    ? "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*"
+                    : "CSVファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*",
+                DefaultExt = isJson
+                    ? ".json"
+                    : ".csv",
                 AddExtension = true,
                 FileName =
                     "ymm4-voice-review-"
                     + DateTime.Now.ToString(
                         "yyyyMMdd-HHmmss")
-                    + ".json",
+                    + (isJson
+                        ? ".json"
+                        : ".csv"),
                 OverwritePrompt = true,
             };
 
@@ -133,21 +166,28 @@ public sealed class PronunciationAssistToolView : UserControl
                 return;
             }
 
-            var json =
-                ReviewExportJson.Serialize(
+            var text = isJson
+                ? ReviewExportJson.Serialize(
+                    prepared.Session.Package)
+                : ReviewExportCsv.Serialize(
                     prepared.Session.Package);
 
             await File.WriteAllTextAsync(
                 dialog.FileName,
-                json,
+                text,
                 new UTF8Encoding(
-                    encoderShouldEmitUTF8Identifier: false));
+                    encoderShouldEmitUTF8Identifier:
+                        !isJson));
 
             viewModel.CommitReviewExport(
                 prepared.Session);
 
             status.Text =
-                $"{prepared.Session.Package.Voices.Count}件のVoiceItemを書き出しました。\n"
+                $"{prepared.Session.Package.Voices.Count}件のVoiceItemを"
+                + (isJson
+                    ? "JSON"
+                    : "CSV")
+                + "へ書き出しました。\n"
                 + dialog.FileName;
         }
         catch (Exception ex)
@@ -158,8 +198,15 @@ public sealed class PronunciationAssistToolView : UserControl
         }
         finally
         {
-            exportButton.IsEnabled = true;
+            SetExportButtonsEnabled(true);
         }
+    }
+
+    void SetExportButtonsEnabled(
+        bool enabled)
+    {
+        jsonExportButton.IsEnabled = enabled;
+        csvExportButton.IsEnabled = enabled;
     }
 }
 
