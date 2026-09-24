@@ -58,10 +58,14 @@ def reading_for(text):
 
 def phrases_for(text):
     reading = reading_for(text)
-    if reading == "トウキョウダイガク":
+    if reading == "トウキョウ、ダイガク":
         return [
             phrase(["ト", "ウ", "キョ", "ウ"], True),
             phrase(["ダ", "イ", "ガ", "ク"], False),
+        ]
+    if reading == "トウキョウダイガク":
+        return [
+            phrase(["ト", "ウ", "キョ", "ウ", "ダ", "イ", "ガ", "ク"], False),
         ]
     if reading == "トウキョウ":
         return [phrase(["ト", "ウ", "キョ", "ウ"], False)]
