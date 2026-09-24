@@ -25,7 +25,7 @@ https://github.com/ziro-lab/chat-native-work-lab-001
 
 | [PR #137 — Same-speaker reading prefix resolver](https://github.com/ziro-lab/chat-native-work-lab-001/pull/137) | public `ConvertKanjiToYomiAsync`はbuilt-in VOICEVOX speakerで`/audio_query?text=...`を使い、full/prefix readingを返す。normalized prefix readingをAudioQueryの累積`Mora.Text` phrase-endへ一意に対応付け、PauseMora存在まで確認。 | 実文ごとのprefix安定性は保証せず、exact per-item validationでfail closed。 |
 
-| [PR #140 — Transient helper mora](https://github.com/ziro-lab/chat-native-work-lab-001/pull/140) | Real VoiceItemでpersisted Serif/Hatsuonを変更せず、transient readingだけへhelper kanaを挿入。`エウエウエ`のhelper `ウ.vowel_length=0`、`エセエ`のhelper `セ.consonant_length=0` + `vowel_length=0.12`維持を実`/synthesis` JSONまで確認。corrected WAVはそれぞれ5444/5644 bytes。 | durable helper anchor/schema・source編集後の再位置決めは未freeze。 |
+| [PR #140 — Transient helper mora](https://github.com/ziro-lab/chat-native-work-lab-001/pull/140) | Real VoiceItemでpersisted Serif/Hatsuonを変更せず、transient readingだけへhelper kanaを挿入。`エウエウエ`のhelper `ウ.vowel_length=0`、`エセエ`のhelper `セ.consonant_length=0` + `vowel_length=0.12`維持を実`/synthesis` JSONまで確認。corrected WAVはそれぞれ5444/5644 bytes。 | durable schema/anchor/reloadはProduct PR #3で閉じた。 |
 
 Lab #140 helper-mora chain:
 
@@ -40,6 +40,7 @@ Lab #140 helper-mora chain:
 | Evidence | Proven | Boundary |
 | --- | --- | --- |
 | [Product PR #2 — A1 Zero-pause MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/2) | Real YMM4 Lite 4.56.1.0上で製品DLLそのものを別pluginとしてロードし、Toolを開かず自動runtime起動。baseline WAV（4844 bytes / SHA256 `58a2f64e...`）→ corrected WAV（5444 bytes / SHA256 `285df804...`）へ補正。Effect disableでbaseline、re-enableで同一corrected SHA256、marker removeでbaseline、marker restoreでcorrected、Hatsuon不一致でfail-closed baseline、互換Hatsuon復帰で同一corrected WAVへ再適用。通常CIは13/13 tests PASS。 | 物理スピーカーでの知覚確認は対象外。project save/reloadそのものの製品native smokeはLab #131/#132のhost evidenceに依存。 |
+| [Product PR #3 — A2 Helper mora MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/3) | Version付きhelper JSONをAssist Effectへdurable保存。position + left/right contextでsource編集後にanchorを一意再解決し、same-speaker prefix readingからcurrent Hatsuon境界へexact mapping。transient augmented reading上でhelper moraを累積Mora.Textから再特定し、zeroVowel / zeroConsonantを適用。曖昧anchorではbaselineへfail closed。A1 `<w0>`との同居、実project save/reload後のJSON復元→fixture speaker rebind→自動helper再適用まで実YMM4でGREEN。 | A2 MVPは1 helper rule = exactly 1 inserted VOICEVOX moraを要求。物理スピーカー知覚確認は対象外。 |
 
 Native chain:
 
@@ -127,3 +128,16 @@ API/既存コード/設計上は成立しそうだが、製品条件の実ホス
 
 「既存プラグインがやっている」だけではPROVENにはしません。  
 既存コードはReferenceとして利用し、必要な挙動はLabで再検証します。
+
+
+### Product A2 final native chain
+
+- run `35971940325`
+- job `107543448102`
+- source `95d10914d768e5326abb03d1f23752c3ed0d1c79`
+- artifact `10796611315`
+- artifact SHA256 `5cfbdd9678bc222129a5fde555c5614b979fa9f76d31a9ea0e427ceb5e414d0a`
+- build/unit run `35971940326`: 22/22 PASS, 0 warnings, 0 errors
+- A1 native regression run `35971940306`: GREEN
+
+A2 native acceptance includes vowel helper x2, consonant helper with vowel preservation, source-prefix insertion followed by safe anchor relocation, ambiguous-context baseline restoration, combined `<w0>` + helper correction on one Pronounce, and real project save/reload with exact `HelperRulesJson` restoration and automatic reapply.

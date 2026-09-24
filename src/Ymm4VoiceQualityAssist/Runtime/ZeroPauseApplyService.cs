@@ -15,6 +15,9 @@ public enum AssistApplyStatus
     MissingVoiceParameter,
     EmptyHatsuon,
     NoMarkers,
+    InvalidHelperRules,
+    HelperResolutionFailed,
+    HelperMutationFailed,
     ResolutionFailed,
     MutationFailed,
     SynthesisFailed,
@@ -41,18 +44,70 @@ public sealed class ZeroPauseApplyService
     public BoundaryMarkerParseResult ParseMarkers(VoiceItem voice) =>
         BoundaryMarkerParser.Parse(voice.Serif ?? string.Empty);
 
+    public bool HasHelperConfiguration(VoiceItem voice) =>
+        EnumerateAssistEffects(voice)
+            .Any(effect =>
+                !string.IsNullOrWhiteSpace(effect.HelperRulesJson));
+
+    public bool TryGetHelperRuleSet(
+        VoiceItem voice,
+        out HelperRuleSet ruleSet,
+        out string? error)
+    {
+        var rules = new List<HelperMoraRule>();
+
+        foreach (var effect in EnumerateAssistEffects(voice)
+            .Where(x => x.IsEnabled))
+        {
+            if (!HelperRuleCodec.TryDecode(
+                effect.HelperRulesJson,
+                out var decoded,
+                out error))
+            {
+                ruleSet = HelperRuleSet.Empty;
+                return false;
+            }
+
+            rules.AddRange(decoded.Rules);
+        }
+
+        ruleSet = new HelperRuleSet(
+            HelperRuleSet.CurrentVersion,
+            rules);
+        error = null;
+        return true;
+    }
+
     public async Task<AssistApplyResult> ApplyAsync(VoiceItem voice)
     {
         ArgumentNullException.ThrowIfNull(voice);
 
         var markerSource = ParseMarkers(voice);
-        if (markerSource.ZeroWaitPositions.Count == 0)
+
+        if (!TryGetHelperRuleSet(
+            voice,
+            out var helperRules,
+            out var helperRuleError))
+        {
+            return new AssistApplyResult(
+                AssistApplyStatus.InvalidHelperRules,
+                0,
+                null,
+                helperRuleError ?? "Helper rule JSON is invalid.");
+        }
+
+        var hasMarkers =
+            markerSource.ZeroWaitPositions.Count > 0;
+        var hasHelpers =
+            helperRules.Rules.Count > 0;
+
+        if (!hasMarkers && !hasHelpers)
         {
             return new AssistApplyResult(
                 AssistApplyStatus.NoMarkers,
                 0,
                 null,
-                "No official <w0> boundary markers were found.");
+                "No zero-pause markers or helper-mora rules were found.");
         }
 
         if (!TryResolveVoiceContext(
@@ -84,7 +139,35 @@ public sealed class ZeroPauseApplyService
                 "VoiceItem.FilePath is unavailable.");
         }
 
-        var baselinePath = CreateTempWavePath();
+        HelperReadingPlan? helperPlan = null;
+        var synthesisText = hatsuon;
+
+        if (hasHelpers)
+        {
+            var helperPlanResult =
+                await SameSpeakerHelperReadingPlanner.ResolveAsync(
+                    speaker!,
+                    parameter!,
+                    markerSource.CleanText,
+                    hatsuon,
+                    helperRules.Rules);
+
+            if (!helperPlanResult.IsSuccess
+                || helperPlanResult.Plan is null)
+            {
+                return new AssistApplyResult(
+                    AssistApplyStatus.HelperResolutionFailed,
+                    0,
+                    null,
+                    helperPlanResult.Message
+                        ?? "Helper reading plan could not be resolved.");
+            }
+
+            helperPlan = helperPlanResult.Plan;
+            synthesisText = helperPlan.AugmentedReading;
+        }
+
+        var analysisPath = CreateTempWavePath();
         var correctedPath = CreateTempWavePath();
 
         try
@@ -93,14 +176,16 @@ public sealed class ZeroPauseApplyService
             try
             {
                 freshPronounce = await speaker!.CreateVoiceAsync(
-                    hatsuon,
+                    synthesisText,
                     pronounce: null,
                     parameter,
-                    baselinePath);
+                    analysisPath);
             }
             catch (Exception ex)
             {
-                return SynthesisFailure("Baseline analysis/synthesis failed.", ex);
+                return SynthesisFailure(
+                    "Fresh analysis/synthesis failed.",
+                    ex);
             }
 
             if (freshPronounce is null)
@@ -110,22 +195,6 @@ public sealed class ZeroPauseApplyService
                     0,
                     null,
                     "The active voice provider returned no Pronounce.");
-            }
-
-            var resolution = await SameSpeakerBoundaryResolver.ResolveAsync(
-                speaker!,
-                parameter!,
-                markerSource,
-                hatsuon,
-                freshPronounce);
-
-            if (!resolution.IsSuccess)
-            {
-                return new AssistApplyResult(
-                    AssistApplyStatus.ResolutionFailed,
-                    0,
-                    resolution.Status,
-                    resolution.Message);
             }
 
             if (!VoiceVoxPronounceAdapter.TryProject(
@@ -138,34 +207,90 @@ public sealed class ZeroPauseApplyService
                     AssistApplyStatus.MutationFailed,
                     0,
                     BoundaryResolutionStatus.MoraStreamMismatch,
-                    projectionError ?? "VOICEVOX Pronounce projection failed.");
+                    projectionError
+                        ?? "VOICEVOX Pronounce projection failed.");
             }
 
-            var mutation = ZeroPauseMutator.Apply(
-                projection,
-                resolution);
+            var mutatedCount = 0;
+            BoundaryResolutionStatus? boundaryStatus = null;
 
-            if (!mutation.Applied)
+            // Validate and mutate helper moras only on the detached fresh
+            // Pronounce. Nothing reaches VoiceItem/WAV until every correction
+            // step and the final synthesis have succeeded.
+            if (helperPlan is not null)
             {
-                return new AssistApplyResult(
-                    AssistApplyStatus.MutationFailed,
-                    0,
-                    resolution.Status,
-                    mutation.Error);
+                var helperMutation = HelperMoraMutator.Apply(
+                    projection,
+                    helperPlan);
+
+                if (!helperMutation.IsSuccess)
+                {
+                    return new AssistApplyResult(
+                        AssistApplyStatus.HelperMutationFailed,
+                        0,
+                        null,
+                        helperMutation.Message);
+                }
+
+                mutatedCount += helperMutation.MutatedMoraCount;
+            }
+
+            if (hasMarkers)
+            {
+                var resolution = helperPlan is null
+                    ? await SameSpeakerBoundaryResolver.ResolveAsync(
+                        speaker!,
+                        parameter!,
+                        markerSource,
+                        hatsuon,
+                        freshPronounce)
+                    : await AugmentedZeroPauseBoundaryResolver.ResolveAsync(
+                        speaker!,
+                        parameter!,
+                        markerSource,
+                        helperPlan,
+                        freshPronounce);
+
+                if (!resolution.IsSuccess)
+                {
+                    return new AssistApplyResult(
+                        AssistApplyStatus.ResolutionFailed,
+                        0,
+                        resolution.Status,
+                        resolution.Message);
+                }
+
+                var mutation = ZeroPauseMutator.Apply(
+                    projection,
+                    resolution);
+
+                if (!mutation.Applied)
+                {
+                    return new AssistApplyResult(
+                        AssistApplyStatus.MutationFailed,
+                        0,
+                        resolution.Status,
+                        mutation.Error);
+                }
+
+                mutatedCount += mutation.MutatedPhraseCount;
+                boundaryStatus = resolution.Status;
             }
 
             IVoicePronounce? regenerated;
             try
             {
                 regenerated = await speaker!.CreateVoiceAsync(
-                    hatsuon,
+                    synthesisText,
                     freshPronounce,
                     parameter,
                     correctedPath);
             }
             catch (Exception ex)
             {
-                return SynthesisFailure("Corrected synthesis failed.", ex);
+                return SynthesisFailure(
+                    "Corrected synthesis failed.",
+                    ex);
             }
 
             if (regenerated is null
@@ -175,25 +300,26 @@ public sealed class ZeroPauseApplyService
                 return new AssistApplyResult(
                     AssistApplyStatus.SynthesisFailed,
                     0,
-                    resolution.Status,
+                    boundaryStatus,
                     "Corrected synthesis did not produce a usable WAV.");
             }
 
-            // Commit only after the complete correction path succeeded.
-            // This keeps resolver/synthesis failure non-destructive.
-            File.Copy(correctedPath, targetPath, overwrite: true);
+            File.Copy(
+                correctedPath,
+                targetPath,
+                overwrite: true);
             voice.ClearVoiceCache();
             voice.Pronounce = regenerated!;
 
             return new AssistApplyResult(
                 AssistApplyStatus.Applied,
-                mutation.MutatedPhraseCount,
-                resolution.Status,
+                mutatedCount,
+                boundaryStatus,
                 null);
         }
         finally
         {
-            TryDelete(baselinePath);
+            TryDelete(analysisPath);
             TryDelete(correctedPath);
         }
     }

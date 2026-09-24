@@ -109,7 +109,21 @@ Product native chain:
 - artifact `10792103203`
 - SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
 
-次の主作業は **A2 Helper moraの製品実装**。transient helper合成機構はLab #140でGREENになったため、version付きhelper rule + safe anchor relocation + save/reload再適用を製品へ落とします。A1の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
+A2 Helper moraも製品実装まで完了しました。version付きhelper ruleをAssist Effectへ保存し、clean Serif上のposition + left/right contextからsource編集後も一意な場合だけanchorを再解決します。helperはSerif/Hatsuonへ永続挿入せず、same-speaker reading上のtransient augmented readingとして合成します。
+
+YMM4 4.56.1.0 product-nativeで、zeroVowel / zeroConsonant、source位置ずれ後の再解決、曖昧anchor時のbaseline復帰、A1 `<w0>`との同居、実project save/reload後のhelper rule復元と自動再適用までGREENです。
+
+A2 final native chain:
+
+- run `35971940325`
+- job `107543448102`
+- source `95d10914d768e5326abb03d1f23752c3ed0d1c79`
+- artifact `10796611315`
+- SHA256 `5cfbdd9678bc222129a5fde555c5614b979fa9f76d31a9ea0e427ceb5e414d0a`
+- build/unit `35971940326`: 22/22 PASS
+- A1 native regression `35971940306`: GREEN
+
+次の機能候補は **A3 Optional prosody assist**。A1/A2の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
 
 ## Documents
 

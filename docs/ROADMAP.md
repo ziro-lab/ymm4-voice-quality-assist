@@ -53,16 +53,29 @@ Product native evidence:
 - artifact `10792103203`
 - artifact SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
 
-### A2. Helper mora — MECHANISM PROVEN / PRODUCT IMPLEMENTATION NEXT
+### A2. Helper mora — CLOSED / PRODUCT NATIVE GREEN
 
 - [x] helperをSerif/Hatsuonへ永続挿入しない方針（Assist Effect設定 → transient augmented reading）
-- [x] helper vowel duration = 0（Lab #140）
-- [x] helper consonant duration = 0 + helper vowel維持（Lab #140）
-- [x] subtitle/通常Hatsuonを変更せず実VoiceItemへ合成可能（Lab #140）
-- [ ] durable helper rule schema / codec
-- [ ] helper anchorの安全な再解決（source text変更時）
-- [ ] regeneration / save-reload product reapply
-- [ ] A2 product-native smoke
+- [x] helper vowel duration = 0（Lab #140 + Product PR #3）
+- [x] helper consonant duration = 0 + helper vowel維持（Lab #140 + Product PR #3）
+- [x] subtitle/通常Hatsuonを変更せず実VoiceItemへ合成可能
+- [x] version付きdurable helper rule schema / codec（Assist Effect string setting）
+- [x] helper anchorの安全な再解決（position fast path + left/right context、0/複数候補はfail closed）
+- [x] same-speaker Serif prefix → current Hatsuon boundaryのexact mapping
+- [x] transient augmented reading → helper moraを累積`Mora.Text`で一意再特定
+- [x] A1 `<w0>` + A2 helperの同一Pronounce上での併用
+- [x] regeneration / real project save-reload後のproduct自動reapply
+- [x] A2 product-native smoke
+
+Product native evidence:
+
+- run `35971940325`
+- job `107543448102`
+- source `95d10914d768e5326abb03d1f23752c3ed0d1c79`
+- artifact `10796611315`
+- artifact SHA256 `5cfbdd9678bc222129a5fde555c5614b979fa9f76d31a9ea0e427ceb5e414d0a`
+- build/unit run `35971940326`: 22/22 PASS / 0 warnings / 0 errors
+- A1 native regression run `35971940306`: GREEN
 
 ### A3. Optional prosody assist
 

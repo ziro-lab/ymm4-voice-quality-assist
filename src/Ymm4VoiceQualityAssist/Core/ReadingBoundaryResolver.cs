@@ -12,6 +12,7 @@ public enum BoundaryResolutionStatus
     NoUniquePhraseBoundary,
     MissingPauseMora,
     DuplicateTarget,
+    HelperBoundaryConflict,
 }
 
 public sealed record PhraseReadingProjection(

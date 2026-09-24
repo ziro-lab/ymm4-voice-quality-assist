@@ -462,9 +462,9 @@ real VoiceItem.FilePath
 
 したがってA2のhelper指定はSerif/Hatsuon rewritingではなく、Assist Effect側のdurable設定として保持します。生成済みaugmented reading / Pronounce / WAVはA1と同じくderived runtime stateです。
 
-### Helper rule persistence candidate
+### Helper rule persistence model — A2 product-native proven
 
-A2 MVPはPR #131で既にsave/reload実証済みの**Effect string setting**を再利用し、version付きJSONをcanonical durable representationにします。これによりYMM4固有の新しいcollection serializer挙動を追加前提にしません。
+A2 MVPはPR #131でsave/reload実証済みの**Effect string setting**を再利用し、`PronunciationAssistEffect.HelperRulesJson`へversion付きJSONをcanonical durable representationとして保存します。Product PR #3のreal project save/reloadでもexact JSON復元と自動再適用まで確認済みです。
 
 概念形:
 
@@ -485,9 +485,18 @@ A2 MVPはPR #131で既にsave/reload実証済みの**Effect string setting**を�
 }
 ```
 
-`position`はfast path、`left/right`はsource編集後の再位置決め用です。現在Serifでexact positionがまだ文脈一致する場合はそのまま使い、ずれた場合のみcontextから一意候補を探索します。候補0件または複数件ならfail closedし、helperを挿入しません。
+`position`はfast path、`left/right`はsource編集後の再位置決め用です。現在clean Serifで保存positionの文脈がまだexactならそのまま使い、ずれた場合のみ全境界からcontext一致を探索します。候補0件または複数件ならfail closedし、baselineへ戻します。
 
-anchorをbaseline readingへ写像する際はA1と同じsame-speaker prefix readingを利用し、Serif文字indexをmora indexとして直接扱いません。
+anchorをreadingへ写像する際はA1と同じsame-speaker `ConvertKanjiToYomiAsync(prefix)`を利用します。prefix readingがcurrent Hatsuonの正規化prefixに一意一致するUTF-16境界だけを採用し、Serif文字indexをmora indexとして直接扱いません。
+
+transient augmented readingをVOICEVOX解析した後は、各helperの「挿入前までの正規化prefix」と「helperを含む正規化prefix」を累積`Mora.Text`境界へ照合します。A2 MVPはその差が**exactly 1 mora**の時だけmutationします。
+
+- `zeroVowel`: target moraの`VowelLength = 0`
+- `zeroConsonant`: positive consonantを持つtarget moraの`ConsonantLength = 0`。VowelLengthは保持
+- helperと`<w0>`が同一reading boundaryへ重なる場合はfail closed
+- A1/A2が別boundaryなら同じdetached Pronounce上でhelper mutationとPauseMora=0を適用してから1回のfinal synthesisへ送る
+
+Product PR #3のnative smokeでは、source先頭追加後のanchor relocation、曖昧context時のbaseline復帰、zeroVowel x2、zeroConsonant + vowel保持、A1 `<w0>`との同居、native project save/reload後のhelper rule復元と自動再適用までGREENです。
 
 ## 6. Voice Review Bridge
 
