@@ -189,14 +189,57 @@ B2 final verification:
 
 B2はproposal生成・検証まで。現在Timelineへの再解決、before/after diff、選択、apply、UndoはB3へ分離する。
 
-### B3. Import / Review
+### B3. Import / Review — CLOSED / PRODUCT NATIVE GREEN
 
-- [ ] schema validation
-- [ ] stale source detection
-- [ ] before/after diff
-- [ ] select all / per-item apply
-- [ ] rejected proposalを適用しない
-- [ ] Undo-compatible apply unit
+- [x] B2 correction package schema / export package validation
+- [x] same-session `exportRef -> live VoiceItem` resolution
+- [x] cross-session fingerprint + locator resolution
+- [x] `EXACT_SESSION / EXACT_FINGERPRINT / STALE / MISSING / AMBIGUOUS`
+- [x] stale source detection
+- [x] before/after preview（Hatsuon / boundary / helper / prosody）
+- [x] select all / per-item apply UI
+- [x] exact resolved itemだけチェック可能
+- [x] `noChange` は初期非選択
+- [x] rejected / stale proposalを適用しない
+- [x] apply直前fingerprint再確認
+- [x] batch全体preflight（1件失敗なら全体未変更）
+- [x] literal `<w0>` only のfail-closed boundary editor
+- [x] helper / boundary collision拒否
+- [x] disabled Assist Effectを勝手に再利用しない
+- [x] helper/prosody用の新規Assist Effect作成 / Undo時除去 / Redo時復元
+- [x] atomic durable source journal
+- [x] YMM4 `UndoRedoActionCommand + AddCommand + Record` へ1 record登録
+- [x] Undo / Redo後はTrack A runtimeがderived Pronounce/WAVを自動再生成
+- [x] B3 product-native smoke
+
+B3 final verification:
+
+- source `b1ecbcd4a0eef09daecbc8fb3aa94463ee829d9d`
+- normal build/unit run `35993465474`: 121/121 PASS / 0 warnings / 0 errors
+- B3 native run `35993465363`: GREEN
+- job `107612773315`
+- artifact `10805292609`
+- artifact SHA256 `f548bbf7271f1562712fb8ced06fe25579ea9d1f24bd43eec6b0d39747348ff2`
+- final corrected WAV SHA256 `397cfa0bedf7e0f0df1b25320325dc9a408a38f3aeafc512f7454cb42f54722a`
+- A1 native regression `35993465612`: GREEN
+- A2 native regression `35993465546`: GREEN
+- A3 native regression `35993465367`: GREEN
+
+Native acceptance includes:
+
+- one exported item changed after export -> STALE / apply不可
+- EXACT + STALEの同時選択をpreflight拒否し、EXACT側も未変更
+- EXACT itemのみapply
+- durable Serif `<w0>` + helper rule + Hold prosody作成
+- Track A final synthesisで pause=0 / helper vowel=0 / Hold pitchを同時確認
+- Undoでdurable source + baseline WAV復元
+- Redoでdurable source + identical corrected WAV復元
+- host history event: Recorded=1 / Undoed=1 / Redoed=1
+
+Non-blocking hands-on:
+
+- [ ] 実YMM4でcorrection JSON / 元review JSONのOpenFileDialogを操作
+- [ ] Import一覧の見た目・スクロール・チェック操作を確認
 
 ---
 
