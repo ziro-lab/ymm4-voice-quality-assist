@@ -299,7 +299,7 @@ public static class ReviewCorrectionValidator
 
         var removes = operations
             .OfType<RemoveBoundaryCorrection>()
-            .Select(x => x.CleanTextPosition)
+            .Select(x => x.Position)
             .ToArray();
 
         foreach (var position
@@ -405,7 +405,7 @@ public static class ReviewCorrectionValidator
 
         foreach (var duplicate
             in helpers.GroupBy(
-                x => x.CleanTextPosition)
+                x => x.Position)
                 .Where(x => x.Count() > 1))
         {
             Add(
