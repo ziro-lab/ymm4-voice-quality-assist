@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: design / validation / early prototype  
+> Status: **A1 Zero-pause MVP product-native green / early prototype**  
 > 現時点では配布版プラグインはありません。
 
 ## 二本柱
@@ -97,7 +97,17 @@ Undo/Redoの履歴semanticsに加えて、current `UndoRedoManager` をpublic `T
 
 A0の主要host routeは閉じました。補正WAV差し替え後はpublic `ClearVoiceCache()`でstale cacheを破棄し、regenerated Pronounceを戻して通常のhost state通知へ流します。CIでは物理スピーカーの知覚確認までは主張しませんが、製品統合を止める専用refresh API依存はありません。
 
-次の主作業は、**A1 Zero-pause boundary MVPとしてAssist Effect / VoiceItem Controller / `<w0>`境界解決 / pause=0再生成を製品コードへ落とすこと**です。
+A1 Zero-pause boundary MVPは製品コードへ実装済みです。YMM4 4.56.1.0上でToolを開かず自動runtimeが起動し、`<w0>`境界のsame-speaker resolver、pause=0補正、cache更新、disable/re-enable、marker remove/restore、Hatsuon mismatch時のfail-closed baseline復帰までnative GREENになりました。
+
+Product native chain:
+
+- run `35961051326`
+- job `107509502673`
+- source `601d3ad4736d9a21a0c75a00042f6169ea42e542`
+- artifact `10792103203`
+- SHA256 `f19f2cdea5b68efce40fcd289a70e3c2dccd95e0a57959738acc9582d9dfc80d`
+
+次の主作業は **A2 Helper mora**。A1の実機スピーカー知覚確認はnon-blocking hands-on acceptanceとして残します。
 
 ## Documents
 
