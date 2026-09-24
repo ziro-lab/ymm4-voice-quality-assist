@@ -1,6 +1,6 @@
 # Review Bridge schema v0
 
-Status: **DRAFT overall / B0 identity+validation and B1 export package FROZEN**
+Status: **DRAFT overall / B0 identity+validation, B1 export, and B2 correction wire FROZEN**
 
 この文書はVoice Review Bridgeの最初の交換形式を具体化します。
 
@@ -148,26 +148,65 @@ Local parserで取れる情報はLLMに再解析させない。
 enabled Assist Effectのhelper JSONが壊れているなど、B0 fingerprint materialを正確に作れないVoiceが1件でもあればwhole exportをfail closedする。劣化したpackageを黙って出力しない。
 
 
-## 5. Correction proposal
+## 5. Correction proposal — B2 FROZEN
 
 schema: `ymm4.voice-corrections.v0`
 
-Proposalは元packageの`exportSessionId`を返します。
+top-level:
 
-v0 operation候補:
+- `schema`
+- `exportSessionId`
+- `corrections[]`
 
-- `setReading`
-- `addBoundary`
-- `removeBoundary`
-- `helperVowelZero`
-- `helperConsonantZero`
-- `setProsodyGesture`
+各correction:
+
+- `exportRef`
+- `sourceFingerprint`
+- `operations[]`
+
+B2 v0は**exportされた全Voiceをexactly once返す**。変更不要のVoiceも省略せず、operationを1つだけ `noChange` にする。これにより未レビューと変更なしを区別する。
+
+operation:
+
+- `setReading { reading }`
+- `addBoundary { position }`
+- `removeBoundary { position }`
+- `helperVowelZero { position, helper }`
+- `helperConsonantZero { position, helper }`
+- `setProsodyGesture { gesture }`
 - `noChange`
 
-### addBoundary
+prosody gesture:
 
-位置はcontrol-tag除去後のclean text上のUTF-16 indexをv0候補とします。
-Unicode境界問題は実装前に日本語・絵文字・サロゲートペアで確認します。
+- `none`
+- `lightRise`
+- `lightFall`
+- `hold`
+
+### Review semantics
+
+- 読み・固有名詞・専門語は `setReading` でHatsuon候補を返す。Serifは書き換えない。
+- boundary positionは `controls.cleanText` のUTF-16 boundary。add/removeはinteriorのみ。
+- helper positionは0〜cleanText lengthのboundary。
+- helperは発音上妥当な場合だけ提案する。
+- 不確実なら推測修正より `noChange` を優先する。
+- unknown operationは拒否する。
+- free-form code/proseはcanonical responseに含めない。
+
+### B2 wire validation
+
+LLM responseは元B1 Exportに対して次を検証する。
+
+- schema
+- exportSessionId exact
+- exportRef存在
+- duplicate exportRef拒否
+- sourceFingerprint exact
+- exported Voiceのcomplete coverage
+- operation type/payload
+- B0 domain validation
+
+B2はここで停止し、現在のYMM4 Timelineは変更しない。current source再解決・diff・選択・applyはB3。
 
 ## 6. Import resolution states — FROZEN
 
