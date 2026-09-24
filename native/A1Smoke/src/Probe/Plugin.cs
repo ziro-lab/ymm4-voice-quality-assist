@@ -807,8 +807,159 @@ internal static class Probe
             await Task.Delay(100);
         }
 
+        DumpProductRuntimeState(name);
         throw new TimeoutException(name);
     }
+
+    static void DumpProductRuntimeState(string reason)
+    {
+        try
+        {
+            const string runtimeTypeName =
+                "Ymm4VoiceQualityAssist.Runtime.VoiceQualityAssistRuntime";
+
+            var productAssembly = AppDomain.CurrentDomain
+                .GetAssemblies()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        x.GetName().Name,
+                        "Ymm4VoiceQualityAssist",
+                        StringComparison.Ordinal));
+
+            var runtimeType = productAssembly?.GetType(
+                runtimeTypeName,
+                throwOnError: false);
+
+            object? ReadStatic(string fieldName) =>
+                runtimeType?.GetField(
+                    fieldName,
+                    BindingFlags.Static
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                ?.GetValue(null);
+
+            var runtimeController = ReadStatic("controller");
+            var runtimeTimeline = ReadStatic("timelineViewModel");
+            var runtimeMain = ReadStatic("mainViewModel");
+            var runtimeTimer = ReadStatic("discoveryTimer");
+
+            object? ReadInstance(
+                object? target,
+                string fieldName)
+            {
+                if (target is null)
+                    return null;
+
+                return target.GetType().GetField(
+                    fieldName,
+                    BindingFlags.Instance
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                    ?.GetValue(target);
+            }
+
+            int? CountEnumerable(object? value)
+            {
+                if (value is null)
+                    return null;
+
+                if (value is ICollection collection)
+                    return collection.Count;
+
+                if (value is IEnumerable enumerable)
+                    return enumerable.Cast<object>().Count();
+
+                return null;
+            }
+
+            var timelineItems = runtimeTimeline?.GetType()
+                .GetProperty(
+                    "Items",
+                    BindingFlags.Instance | BindingFlags.Public)
+                ?.GetValue(runtimeTimeline);
+
+            var states = ReadInstance(
+                runtimeController,
+                "states");
+
+            var activeProperty = runtimeMain?.GetType()
+                .GetProperty(
+                    "ActiveTimelineViewModel",
+                    BindingFlags.Instance | BindingFlags.Public);
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"runtime-state-{SanitizeFilePart(reason)}.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        reason,
+                        productAssembly = productAssembly?.FullName,
+                        runtimeTypeFound = runtimeType is not null,
+                        started = ReadStatic("started"),
+                        discoveryTimer = runtimeTimer is null
+                            ? null
+                            : new
+                            {
+                                type = runtimeTimer.GetType().FullName,
+                                isEnabled = runtimeTimer.GetType()
+                                    .GetProperty("IsEnabled")
+                                    ?.GetValue(runtimeTimer),
+                            },
+                        mainViewModel = runtimeMain is null
+                            ? null
+                            : new
+                            {
+                                type = runtimeMain.GetType().FullName,
+                                activeGetterPublic =
+                                    activeProperty?.GetMethod?.IsPublic == true,
+                                activeValueType =
+                                    activeProperty?.GetValue(runtimeMain)
+                                        ?.GetType().FullName,
+                            },
+                        timelineViewModel = runtimeTimeline is null
+                            ? null
+                            : new
+                            {
+                                type = runtimeTimeline.GetType().FullName,
+                                itemCount = CountEnumerable(timelineItems),
+                            },
+                        controller = runtimeController is null
+                            ? null
+                            : new
+                            {
+                                type = runtimeController.GetType().FullName,
+                                disposed = ReadInstance(
+                                    runtimeController,
+                                    "disposed"),
+                                scanRunning = ReadInstance(
+                                    runtimeController,
+                                    "scanRunning"),
+                                stateCount = CountEnumerable(states),
+                            },
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        catch (Exception ex)
+        {
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"runtime-state-{SanitizeFilePart(reason)}-error.txt"),
+                ex.ToString());
+        }
+    }
+
+    static string SanitizeFilePart(string value) =>
+        string.Concat(
+            value.Select(ch =>
+                char.IsLetterOrDigit(ch)
+                    ? ch
+                    : '-'));
 
     static string HashFile(string path) =>
         Convert.ToHexString(
