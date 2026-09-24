@@ -117,9 +117,9 @@ Product native evidence:
 - [x] export schema v0 Draft
 - [x] correction proposal schema v0 Draft
 - [x] version field Draft
-- [ ] source fingerprint canonicalizationをfreeze
-- [ ] cross-session再解決アルゴリズムをLab/Unit test
-- [ ] validation rules実装
+- [x] source fingerprint canonicalizationをfreeze（UTF-8 canonical JSON + frozen SHA-256 vector）
+- [x] cross-session再解決アルゴリズムをUnit test（exact 1件のみauto-apply、duplicate exactはAMBIGUOUS、locator-onlyはSTALE）
+- [ ] correction proposal validation rules実装
 
 ### B1. Export
 
