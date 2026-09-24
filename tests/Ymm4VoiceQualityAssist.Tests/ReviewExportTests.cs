@@ -233,6 +233,44 @@ public sealed class ReviewExportTests
     }
 
     [Fact]
+    public void Builder_MissingGeneratedPronounceKeepsOptionalSummaryEmpty()
+    {
+        var voice = Voice(
+            10,
+            1,
+            "本文",
+            "ホンブン",
+            "小夜");
+
+        Assert.Null(
+            voice.Pronounce);
+
+        var result =
+            ReviewExportBuilder.Build(
+                [voice],
+                "session",
+                DateTimeOffset.UnixEpoch);
+
+        Assert.True(
+            result.IsSuccess,
+            result.Message);
+
+        var summary =
+            Assert.Single(
+                result.Package!.Voices)
+                .Pronunciation;
+
+        Assert.False(
+            summary.HasGeneratedPronounce);
+
+        Assert.Null(
+            summary.GeneratedMoraReading);
+
+        Assert.Null(
+            summary.AccentPhraseCount);
+    }
+
+    [Fact]
     public void Builder_UsesExactlyTheB0Fingerprint()
     {
         var voice = Voice(
