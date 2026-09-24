@@ -241,6 +241,20 @@ internal static class Probe
                 throw new InvalidOperationException("Product Assist Effect type was not discovered.");
             AppendEffect(voice, effect);
 
+            var productTool = PluginLoader.ToolPlugins
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        x.Name,
+                        "Voice Quality Assist",
+                        StringComparison.Ordinal));
+
+            Check("product_tool_registered", productTool is not null);
+
+            WriteHostSurfaceObservation(
+                main,
+                active,
+                productTool);
+
             var toolInvoked = TryOpenProductTool(main);
             Check("product_tool_open_invoked", toolInvoked);
 
@@ -366,6 +380,144 @@ internal static class Probe
         File.Exists(path)
         && new FileInfo(path).Length == 5444
         && GetFirstPauseLength(voice) == 0.0;
+
+    static void WriteHostSurfaceObservation(
+        object main,
+        object active,
+        IToolPlugin? productTool)
+    {
+        static object DescribeProperty(PropertyInfo property) => new
+        {
+            property.Name,
+            type = property.PropertyType.FullName,
+            publicGet = property.GetMethod?.IsPublic == true,
+            publicSet = property.SetMethod?.IsPublic == true,
+        };
+
+        static object DescribeField(FieldInfo field) => new
+        {
+            field.Name,
+            type = field.FieldType.FullName,
+            visibility = field.IsPublic
+                ? "public"
+                : field.IsFamily
+                    ? "protected"
+                    : field.IsAssembly
+                        ? "internal"
+                        : "nonpublic",
+        };
+
+        var mainType = main.GetType();
+        var activeType = active.GetType();
+
+        File.WriteAllText(
+            Path.Combine(output, "host-surface-observation.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    productTool = productTool is null
+                        ? null
+                        : new
+                        {
+                            productTool.Name,
+                            viewModelType = productTool.ViewModelType.FullName,
+                            viewType = productTool.ViewType.FullName,
+                            productTool.AllowMultipleInstances,
+                            productTool.DefaultGroupName,
+                        },
+                    toolPlugins = PluginLoader.ToolPlugins
+                        .Select(x => new
+                        {
+                            x.Name,
+                            type = x.GetType().FullName,
+                            viewModelType = x.ViewModelType.FullName,
+                            viewType = x.ViewType.FullName,
+                        })
+                        .OrderBy(x => x.Name)
+                        .ToArray(),
+                    mainViewModel = new
+                    {
+                        type = mainType.FullName,
+                        publicProperties = mainType
+                            .GetProperties(
+                                BindingFlags.Instance
+                                | BindingFlags.Public)
+                            .Select(DescribeProperty)
+                            .ToArray(),
+                        activeTimelineViewModelProperty = mainType
+                            .GetProperty(
+                                "ActiveTimelineViewModel",
+                                BindingFlags.Instance
+                                | BindingFlags.Public
+                                | BindingFlags.NonPublic)
+                            is { } activeProperty
+                                ? DescribeProperty(activeProperty)
+                                : null,
+                    },
+                    activeTimelineViewModel = new
+                    {
+                        type = activeType.FullName,
+                        publicProperties = activeType
+                            .GetProperties(
+                                BindingFlags.Instance
+                                | BindingFlags.Public)
+                            .Select(DescribeProperty)
+                            .ToArray(),
+                        timelineFields = activeType
+                            .GetFields(
+                                BindingFlags.Instance
+                                | BindingFlags.Public
+                                | BindingFlags.NonPublic)
+                            .Where(x =>
+                                typeof(Timeline).IsAssignableFrom(
+                                    x.FieldType))
+                            .Select(DescribeField)
+                            .ToArray(),
+                        undoManagerFields = activeType
+                            .GetFields(
+                                BindingFlags.Instance
+                                | BindingFlags.Public
+                                | BindingFlags.NonPublic)
+                            .Where(x =>
+                                typeof(YukkuriMovieMaker.UndoRedo.UndoRedoManager)
+                                    .IsAssignableFrom(x.FieldType))
+                            .Select(DescribeField)
+                            .ToArray(),
+                    },
+                    timelineToolInfo = new
+                    {
+                        constructors = typeof(TimelineToolInfo)
+                            .GetConstructors(
+                                BindingFlags.Instance
+                                | BindingFlags.Public
+                                | BindingFlags.NonPublic)
+                            .Select(ctor => new
+                            {
+                                visibility = ctor.IsPublic
+                                    ? "public"
+                                    : "nonpublic",
+                                parameters = ctor.GetParameters()
+                                    .Select(p => new
+                                    {
+                                        p.Name,
+                                        type = p.ParameterType.FullName,
+                                    })
+                                    .ToArray(),
+                            })
+                            .ToArray(),
+                        publicProperties = typeof(TimelineToolInfo)
+                            .GetProperties(
+                                BindingFlags.Instance
+                                | BindingFlags.Public)
+                            .Select(DescribeProperty)
+                            .ToArray(),
+                    },
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+    }
 
     static bool TryOpenProductTool(object main)
     {
