@@ -182,7 +182,8 @@ public sealed class PronunciationAssistController : IDisposable
             return;
 
         if (string.IsNullOrEmpty(propertyName)
-            || propertyName == nameof(PronunciationAssistEffect.IsEnabled))
+            || propertyName == nameof(PronunciationAssistEffect.IsEnabled)
+            || propertyName == nameof(PronunciationAssistEffect.HelperRulesJson))
         {
             QueueScan();
         }
@@ -199,6 +200,8 @@ public sealed class PronunciationAssistController : IDisposable
         var enabled = service.IsAssistEnabled(voice);
         var markers = service.ParseMarkers(voice);
         var hasMarkers = markers.ZeroWaitPositions.Count > 0;
+        var hasHelpers = service.HasHelperConfiguration(voice);
+        var hasCorrections = hasMarkers || hasHelpers;
 
         if (!hasEffect)
         {
@@ -212,7 +215,7 @@ public sealed class PronunciationAssistController : IDisposable
 
         state.HadAssistEffect = true;
 
-        if (!enabled || !hasMarkers)
+        if (!enabled || !hasCorrections)
         {
             // Presence + disabled, or enabled with no durable marker, means
             // ordinary YMM4 audio. This also clears stale corrected audio
@@ -291,14 +294,37 @@ public sealed class PronunciationAssistController : IDisposable
     {
         var speaker = voice.Character?.Voice?.Speaker;
 
+        var helperConfiguration = string.Join(
+            "",
+            EnumerateAssistEffects(voice)
+                .Select(x =>
+                    $"{x.IsEnabled}:{x.HelperRulesJson}"));
+
         return string.Join(
             "",
             voice.Serif ?? string.Empty,
             voice.Hatsuon ?? string.Empty,
             speaker?.API ?? string.Empty,
             speaker?.ID ?? string.Empty,
+            helperConfiguration,
             RuntimeHelpers.GetHashCode(
                 (object?)voice.VoiceParameter ?? voice));
+    }
+
+    static IEnumerable<PronunciationAssistEffect> EnumerateAssistEffects(
+        VoiceItem voice)
+    {
+        if (voice.JimakuVideoEffects
+            is not System.Collections.IEnumerable effects)
+        {
+            yield break;
+        }
+
+        foreach (var value in effects)
+        {
+            if (value is PronunciationAssistEffect effect)
+                yield return effect;
+        }
     }
 
     public void Dispose()
