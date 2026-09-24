@@ -224,6 +224,13 @@ public sealed class PronunciationAssistToolViewModel :
     public void SetTimelineToolInfo(
         TimelineToolInfo info)
     {
+        if (!ReferenceEquals(
+            timeline,
+            info.Timeline))
+        {
+            LastReviewExportSession = null;
+        }
+
         timeline = info.Timeline;
     }
 
