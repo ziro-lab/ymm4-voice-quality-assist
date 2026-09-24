@@ -94,7 +94,7 @@ internal static class Probe
                 }
 
                 timer.Stop();
-                await RunAsync(active, url);
+                await RunAsync(main, active, url);
                 Write("PASS_A1_PRODUCT_NATIVE_SMOKE", null);
             }
             catch (Exception ex)
@@ -107,7 +107,7 @@ internal static class Probe
         timer.Start();
     }
 
-    static async Task RunAsync(object active, string url)
+    static async Task RunAsync(object main, object active, string url)
     {
         var timeline = FindTimeline(active)
             ?? throw new InvalidOperationException(
@@ -241,6 +241,9 @@ internal static class Probe
                 throw new InvalidOperationException("Product Assist Effect type was not discovered.");
             AppendEffect(voice, effect);
 
+            var toolInvoked = TryOpenProductTool(main);
+            Check("product_tool_open_invoked", toolInvoked);
+
             await WaitUntil(
                 "initial correction",
                 () => IsCorrected(voice, voicePath));
@@ -363,6 +366,154 @@ internal static class Probe
         File.Exists(path)
         && new FileInfo(path).Length == 5444
         && GetFirstPauseLength(voice) == 0.0;
+
+    static bool TryOpenProductTool(object main)
+    {
+        var property = main.GetType().GetProperty(
+            "ToolMenuItems",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (property?.GetValue(main) is not IEnumerable roots)
+            return false;
+
+        object? target = null;
+        foreach (var root in roots.Cast<object>())
+        {
+            target = FindToolMenuItem(root, "Voice Quality Assist", 0);
+            if (target is not null)
+                break;
+        }
+
+        if (target is null)
+            return false;
+
+        return TryInvokeMenuItem(target);
+    }
+
+    static object? FindToolMenuItem(
+        object item,
+        string expectedLabel,
+        int depth)
+    {
+        if (depth > 8)
+            return null;
+
+        var type = item.GetType();
+        foreach (var name in new[] { "Header", "Title", "Name" })
+        {
+            try
+            {
+                var label = type.GetProperty(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(item)?.ToString();
+
+                if (string.Equals(
+                    label,
+                    expectedLabel,
+                    StringComparison.Ordinal))
+                {
+                    return item;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var propertyName in new[] { "Children", "Items" })
+        {
+            try
+            {
+                if (type.GetProperty(
+                        propertyName,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        ?.GetValue(item)
+                    is not IEnumerable children)
+                {
+                    continue;
+                }
+
+                foreach (var child in children.Cast<object>())
+                {
+                    var found = FindToolMenuItem(
+                        child,
+                        expectedLabel,
+                        depth + 1);
+                    if (found is not null)
+                        return found;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    static bool TryInvokeMenuItem(object item)
+    {
+        if (item is System.Windows.Input.ICommand direct
+            && direct.CanExecute(null))
+        {
+            direct.Execute(null);
+            return true;
+        }
+
+        var type = item.GetType();
+        foreach (var property in type.GetProperties(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            try
+            {
+                if (property.GetIndexParameters().Length != 0
+                    || property.GetValue(item)
+                        is not System.Windows.Input.ICommand command)
+                {
+                    continue;
+                }
+
+                foreach (var parameter in new object?[] { null, item })
+                {
+                    if (!command.CanExecute(parameter))
+                        continue;
+
+                    command.Execute(parameter);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var method in type.GetMethods(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            if (method.GetParameters().Length != 0)
+                continue;
+
+            if (!(method.Name.Contains("Open", StringComparison.OrdinalIgnoreCase)
+                || method.Name.Contains("Execute", StringComparison.OrdinalIgnoreCase)
+                || method.Name.Contains("Activate", StringComparison.OrdinalIgnoreCase)
+                || method.Name.Contains("Show", StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            try
+            {
+                method.Invoke(item, null);
+                return true;
+            }
+            catch
+            {
+            }
+        }
+
+        return false;
+    }
 
     static IVideoEffect? CreateProductAssistEffect()
     {
