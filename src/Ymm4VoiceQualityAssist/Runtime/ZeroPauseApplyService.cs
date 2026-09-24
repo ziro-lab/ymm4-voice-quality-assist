@@ -1,3 +1,4 @@
+using System.IO;
 using System.Collections;
 using Ymm4VoiceQualityAssist.Core;
 using Ymm4VoiceQualityAssist.Effects;
@@ -182,7 +183,7 @@ public sealed class ZeroPauseApplyService
             // This keeps resolver/synthesis failure non-destructive.
             File.Copy(correctedPath, targetPath, overwrite: true);
             voice.ClearVoiceCache();
-            voice.Pronounce = regenerated;
+            voice.Pronounce = regenerated!;
 
             return new AssistApplyResult(
                 AssistApplyStatus.Applied,
@@ -261,7 +262,7 @@ public sealed class ZeroPauseApplyService
 
             File.Copy(baselinePath, targetPath, overwrite: true);
             voice.ClearVoiceCache();
-            voice.Pronounce = baseline;
+            voice.Pronounce = baseline!;
 
             return new AssistApplyResult(
                 AssistApplyStatus.RestoredBaseline,
