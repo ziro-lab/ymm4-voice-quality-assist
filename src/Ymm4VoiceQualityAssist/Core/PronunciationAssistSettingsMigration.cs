@@ -375,3 +375,168 @@ internal sealed record PronunciationAssistMigrationPair(
     PronunciationAssistEffect Legacy,
     PronunciationAssistAudioEffect Audio,
     PronunciationAssistSettingsSnapshot Snapshot);
+
+
+public enum PronunciationAssistMigrationBatchPrepareStatus
+{
+    Ready,
+    NoChanges,
+    Blocked,
+}
+
+public sealed record PronunciationAssistMigrationBatchPrepareResult(
+    PronunciationAssistMigrationBatchPrepareStatus Status,
+    PronunciationAssistMigrationBatch? Batch,
+    string? Message)
+{
+    public bool IsReady =>
+        Status == PronunciationAssistMigrationBatchPrepareStatus.Ready
+        && Batch is not null;
+}
+
+public sealed class PronunciationAssistMigrationBatch
+{
+    readonly IReadOnlyList<PronunciationAssistMigrationJournal> journals;
+    bool committed;
+
+    PronunciationAssistMigrationBatch(
+        IReadOnlyList<PronunciationAssistMigrationJournal> journals)
+    {
+        this.journals = journals;
+    }
+
+    public int ItemCount => journals.Count;
+
+    public static PronunciationAssistMigrationBatchPrepareResult Prepare(
+        IReadOnlyList<VoiceItem> voices)
+    {
+        ArgumentNullException.ThrowIfNull(voices);
+
+        var journals =
+            new List<PronunciationAssistMigrationJournal>();
+
+        foreach (var voice in voices)
+        {
+            ArgumentNullException.ThrowIfNull(voice);
+
+            var prepared =
+                PronunciationAssistSettingsMigration
+                    .Prepare(voice);
+
+            switch (prepared.Status)
+            {
+                case PronunciationAssistMigrationPrepareStatus.Ready:
+                    journals.Add(
+                        prepared.Journal!);
+                    break;
+
+                case PronunciationAssistMigrationPrepareStatus.NoLegacySettings:
+                    break;
+
+                case PronunciationAssistMigrationPrepareStatus.CanonicalSettingsAlreadyPresent:
+                    return new(
+                        PronunciationAssistMigrationBatchPrepareStatus.Blocked,
+                        null,
+                        "Audio Effectと旧字幕Effectが同じVoiceItemに共存しているため、自動統合を停止しました。対象を確認してください。");
+
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(prepared.Status));
+            }
+        }
+
+        if (journals.Count == 0)
+        {
+            return new(
+                PronunciationAssistMigrationBatchPrepareStatus.NoChanges,
+                null,
+                "移行対象の旧発音補助設定はありません。");
+        }
+
+        return new(
+            PronunciationAssistMigrationBatchPrepareStatus.Ready,
+            new PronunciationAssistMigrationBatch(
+                journals),
+            null);
+    }
+
+    public PronunciationAssistMigrationCommitResult Commit()
+    {
+        if (committed)
+        {
+            return new(
+                PronunciationAssistMigrationCommitStatus.AlreadyCommitted,
+                "Migration batch has already been committed.");
+        }
+
+        var applied =
+            new List<PronunciationAssistMigrationJournal>();
+
+        foreach (var journal in journals)
+        {
+            var result =
+                journal.Commit();
+
+            if (!result.IsSuccess)
+            {
+                for (var index =
+                        applied.Count - 1;
+                     index >= 0;
+                     index--)
+                {
+                    try
+                    {
+                        applied[index]
+                            .UndoOrThrow();
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                return result;
+            }
+
+            applied.Add(
+                journal);
+        }
+
+        committed = true;
+
+        return new(
+            PronunciationAssistMigrationCommitStatus.Success,
+            null);
+    }
+
+    public void UndoOrThrow()
+    {
+        if (!committed)
+        {
+            throw new InvalidOperationException(
+                "Migration batch has not been committed.");
+        }
+
+        for (var index =
+                journals.Count - 1;
+             index >= 0;
+             index--)
+        {
+            journals[index]
+                .UndoOrThrow();
+        }
+    }
+
+    public void RedoOrThrow()
+    {
+        if (!committed)
+        {
+            throw new InvalidOperationException(
+                "Migration batch has not been committed.");
+        }
+
+        foreach (var journal in journals)
+        {
+            journal.RedoOrThrow();
+        }
+    }
+}
