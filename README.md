@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **Track A A1–A3 + Track B B0–B2 green / early prototype**  
+> Status: **Track A A0–A3 + Track B B0–B3 green / early prototype**  
 > 現時点では配布版プラグインはありません。
 
 ## 二本柱
@@ -155,7 +155,23 @@ B2 final verification:
 - A2 native `35986180270`: GREEN
 - A3 native `35986180221`: GREEN
 
-次の主作業は **B3 Import / Review**。実機スピーカー知覚確認とSaveFileDialog/CSV/LLM promptの見た目確認はnon-blocking hands-on acceptanceです。
+B3 Import / Reviewも製品MVPまで完了しました。LLM correction JSONを現在Timelineへsame-session/cross-session再解決し、EXACT / STALE / MISSING / AMBIGUOUSを表示、before/afterを確認してEXACTだけ選択適用できます。選択batchはwhole-preflight後にdurable sourceへatomic applyし、YMM4標準Undo/Redoへ1 recordとして登録します。
+
+B3 final native chain:
+
+- source `b1ecbcd4a0eef09daecbc8fb3aa94463ee829d9d`
+- build/unit `35993465474`: 121/121 PASS / 0 warnings / 0 errors
+- B3 native `35993465363`: GREEN
+- job `107612773315`
+- artifact `10805292609`
+- SHA256 `f548bbf7271f1562712fb8ced06fe25579ea9d1f24bd43eec6b0d39747348ff2`
+- A1 native `35993465612`: GREEN
+- A2 native `35993465546`: GREEN
+- A3 native `35993465367`: GREEN
+
+nativeではSTALE proposal拒否、EXACTのみapply、`<w0>` + helper + HoldのA1/A2/A3複合再生成、Undo baseline復帰、Redoで同一corrected WAV SHA256への復帰まで確認済みです。
+
+これでTrack A A0〜A3とTrack B B0〜B3の当初MVP範囲は一周しました。次はShared層（Correction Model / status model / compatibility / packaging / release）を整理する段階です。実機スピーカー知覚確認とファイルダイアログ/Import一覧の見た目確認はnon-blocking hands-on acceptanceとして残します。
 
 ## Documents
 

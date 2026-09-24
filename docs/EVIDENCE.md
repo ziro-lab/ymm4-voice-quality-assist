@@ -46,6 +46,8 @@ Lab #140 helper-mora chain:
 
 | [Product PR #4 — A3 Optional prosody MVP](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/4) | `None / LightRise / LightFall / Hold` をfresh baseline pitchへ相対適用。pitch=0 / zero-vowel helper moraをgesture対象から除外。None/disableでbaseline復帰し、real project save/reloadでProsody=Hold復元→fixture speaker rebind→automatic product reapplyまでGREEN。A1/A2 native regressionもGREEN。 | stronger acting presets（smooth/sigh-like/surprise-like）と物理スピーカー知覚確認は別途。 |
 
+| [Product PR #8 — B3 Import / Review](https://github.com/ziro-lab/ymm4-voice-quality-assist/pull/8) | B1/B2 packageからsame-session/cross-session target再解決、STALE拒否、preview/selection、whole-batch preflight、atomic durable source journal、public UndoRedoActionCommand 1 record、Track A automatic regenerationを実装。real YMM4でEXACT apply→A1/A2/A3複合corrected WAV→Undo baseline→Redo identical corrected WAVまでGREEN。 | file dialog / review-list visual ergonomicsはhands-on。physical speaker知覚確認は対象外。 |
+
 Native chain:
 
 - run `35961051326`
@@ -158,3 +160,26 @@ A2 native acceptance includes vowel helper x2, consonant helper with vowel prese
 - A2 native regression `35979300153`: GREEN
 
 A3 native acceptance covers LightRise/LightFall/None/Hold transitions, baseline restoration on None/disable, re-enable reapply, persisted Serif/Hatsuon invariance, real project save/reload, exact `Prosody=Hold` restoration and automatic Hold regeneration after reload.
+
+### Product B3 final native chain
+
+- run `35993465363`
+- job `107612773315`
+- source `b1ecbcd4a0eef09daecbc8fb3aa94463ee829d9d`
+- artifact `10805292609`
+- artifact SHA256 `f548bbf7271f1562712fb8ced06fe25579ea9d1f24bd43eec6b0d39747348ff2`
+- normal build/unit run `35993465474`: 121/121 PASS, 0 warnings, 0 errors
+- A1 native regression `35993465612`: GREEN
+- A2 native regression `35993465546`: GREEN
+- A3 native regression `35993465367`: GREEN
+
+B3 native acceptance proves:
+
+- one exported item changed after export is STALE and not applyable;
+- selecting EXACT + STALE is rejected before mutation;
+- selecting the EXACT item applies durable `<w0>`, helper rule and Hold prosody;
+- final VOICEVOX synthesis simultaneously contains pause=0, helper vowel=0 and Hold-relative pitch;
+- stale/unselected item remains unchanged;
+- one host history record is created;
+- Undo removes durable correction and regenerates baseline WAV;
+- Redo restores durable correction and regenerates the exact same corrected WAV SHA256 `397cfa0bedf7e0f0df1b25320325dc9a408a38f3aeafc512f7454cb42f54722a`.

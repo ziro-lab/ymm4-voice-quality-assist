@@ -7,6 +7,7 @@ using Ymm4VoiceQualityAssist.Core;
 using YukkuriMovieMaker.Plugin;
 using YukkuriMovieMaker.Project;
 using YukkuriMovieMaker.Project.Items;
+using YukkuriMovieMaker.UndoRedo;
 
 namespace Ymm4VoiceQualityAssist.Tool;
 
@@ -34,6 +35,7 @@ public sealed class PronunciationAssistToolView : UserControl
     readonly Button jsonExportButton;
     readonly Button csvExportButton;
     readonly Button llmPromptExportButton;
+    readonly Button importButton;
 
     public PronunciationAssistToolView()
     {
@@ -91,6 +93,18 @@ public sealed class PronunciationAssistToolView : UserControl
                 await ExportAsync(
                     ReviewExportFileFormat.LlmPrompt);
 
+        importButton = new Button
+        {
+            Content = "LLMレビュー結果をインポート",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 230,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        importButton.Click +=
+            async (_, _) =>
+                await ImportAsync();
+
         status = new TextBlock
         {
             Text = "Timelineを開いた状態でエクスポートできます。",
@@ -108,10 +122,198 @@ public sealed class PronunciationAssistToolView : UserControl
                 jsonExportButton,
                 csvExportButton,
                 llmPromptExportButton,
+                importButton,
                 status,
             },
         };
     }
+
+    async Task ImportAsync()
+    {
+        if (DataContext
+            is not PronunciationAssistToolViewModel viewModel)
+        {
+            status.Text =
+                "Voice Quality Assistの状態を取得できませんでした。";
+            return;
+        }
+
+        SetActionButtonsEnabled(false);
+
+        try
+        {
+            var correctionDialog =
+                new OpenFileDialog
+                {
+                    Title =
+                        "LLMレビュー結果JSONを選択",
+                    Filter =
+                        "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*",
+                    DefaultExt = ".json",
+                    Multiselect = false,
+                    CheckFileExists = true,
+                };
+
+            if (correctionDialog.ShowDialog()
+                != true)
+            {
+                status.Text =
+                    "インポートをキャンセルしました。";
+                return;
+            }
+
+            var correctionJson =
+                await File.ReadAllTextAsync(
+                    correctionDialog.FileName,
+                    Encoding.UTF8);
+
+            var decoded =
+                ReviewCorrectionJson.Decode(
+                    correctionJson);
+
+            if (decoded.WirePackage is null)
+            {
+                status.Text =
+                    "レビュー結果JSONを読み込めませんでした。\n"
+                    + FormatWireErrors(
+                        decoded.Errors);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                decoded.WirePackage
+                    .ExportSessionId))
+            {
+                status.Text =
+                    "レビュー結果にexportSessionIdがありません。";
+                return;
+            }
+
+            ReviewExportPackage? sourcePackage =
+                null;
+
+            if (viewModel.LastReviewExportSession
+                is { } live
+                && string.Equals(
+                    live.Package.ExportSessionId,
+                    decoded.WirePackage
+                        .ExportSessionId,
+                    StringComparison.Ordinal))
+            {
+                sourcePackage =
+                    live.Package;
+            }
+            else
+            {
+                var sourceDialog =
+                    new OpenFileDialog
+                    {
+                        Title =
+                            "元のVoice Review JSONを選択",
+                        Filter =
+                            "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*",
+                        DefaultExt = ".json",
+                        Multiselect = false,
+                        CheckFileExists = true,
+                    };
+
+                if (sourceDialog.ShowDialog()
+                    != true)
+                {
+                    status.Text =
+                        "元のVoice Review JSONが必要です。";
+                    return;
+                }
+
+                var sourceJson =
+                    await File.ReadAllTextAsync(
+                        sourceDialog.FileName,
+                        Encoding.UTF8);
+
+                if (!ReviewExportJson
+                    .TryDeserialize(
+                        sourceJson,
+                        out sourcePackage,
+                        out var sourceError)
+                    || sourcePackage is null)
+                {
+                    status.Text =
+                        "元のVoice Review JSONを読み込めませんでした。\n"
+                        + (
+                            sourceError
+                            ?? "不明なエラー"
+                        );
+                    return;
+                }
+            }
+
+            var prepared =
+                viewModel.PrepareReviewImport(
+                    correctionJson,
+                    sourcePackage);
+
+            if (!prepared.IsSuccess
+                || prepared.Plan is null)
+            {
+                status.Text =
+                    prepared.Message
+                    ?? "Voice Review Import Planを作成できませんでした。";
+                return;
+            }
+
+            var dialog =
+                new ReviewImportDialog(
+                    prepared.Plan)
+                {
+                    Owner =
+                        Window.GetWindow(this),
+                };
+
+            if (dialog.ShowDialog()
+                != true)
+            {
+                status.Text =
+                    "レビュー結果の適用をキャンセルしました。";
+                return;
+            }
+
+            var applied =
+                viewModel.ApplyReviewImport(
+                    prepared.Plan,
+                    dialog.SelectedExportRefs);
+
+            status.Text =
+                applied.IsSuccess
+                    ? $"{applied.AppliedCount}件のレビュー修正を適用しました。YMM4の元に戻す/やり直しに対応しています。"
+                    : applied.Message
+                        ?? "レビュー修正を適用できませんでした。";
+        }
+        catch (Exception ex)
+        {
+            status.Text =
+                "インポートに失敗しました: "
+                + ex.GetBaseException().Message;
+        }
+        finally
+        {
+            SetActionButtonsEnabled(true);
+        }
+    }
+
+    static string FormatWireErrors(
+        IReadOnlyList<
+            ReviewCorrectionWireError>
+            errors) =>
+        errors.Count == 0
+            ? "詳細なし"
+            : string.Join(
+                Environment.NewLine,
+                errors
+                    .Take(5)
+                    .Select(x =>
+                        x.ExportRef is null
+                            ? $"{x.Code}: {x.Message}"
+                            : $"{x.ExportRef} / {x.Code}: {x.Message}"));
 
     async Task ExportAsync(
         ReviewExportFileFormat format)
@@ -124,7 +326,7 @@ public sealed class PronunciationAssistToolView : UserControl
             return;
         }
 
-        SetExportButtonsEnabled(false);
+        SetActionButtonsEnabled(false);
 
         try
         {
@@ -263,16 +465,17 @@ public sealed class PronunciationAssistToolView : UserControl
         }
         finally
         {
-            SetExportButtonsEnabled(true);
+            SetActionButtonsEnabled(true);
         }
     }
 
-    void SetExportButtonsEnabled(
+    void SetActionButtonsEnabled(
         bool enabled)
     {
         jsonExportButton.IsEnabled = enabled;
         csvExportButton.IsEnabled = enabled;
         llmPromptExportButton.IsEnabled = enabled;
+        importButton.IsEnabled = enabled;
     }
 }
 
@@ -280,6 +483,7 @@ public sealed class PronunciationAssistToolViewModel :
     ITimelineToolViewModel
 {
     Timeline? timeline;
+    UndoRedoManager? undoRedoManager;
 
     public ReviewExportSession? LastReviewExportSession
     {
@@ -298,6 +502,8 @@ public sealed class PronunciationAssistToolViewModel :
         }
 
         timeline = info.Timeline;
+        undoRedoManager =
+            info.UndoRedoManager;
     }
 
     public ReviewExportBuildResult PrepareReviewExport(
@@ -331,4 +537,205 @@ public sealed class PronunciationAssistToolViewModel :
         LastReviewExportSession =
             session;
     }
+
+    public ReviewImportPreparationResult
+        PrepareReviewImport(
+            string correctionJson,
+            ReviewExportPackage sourcePackage)
+    {
+        ArgumentNullException.ThrowIfNull(
+            correctionJson);
+        ArgumentNullException.ThrowIfNull(
+            sourcePackage);
+
+        if (timeline is null)
+        {
+            return ReviewImportPreparationResult
+                .Failure(
+                    "Timelineを取得できませんでした。");
+        }
+
+        var validated =
+            ReviewCorrectionJson
+                .DecodeAndValidateAgainstExport(
+                    correctionJson,
+                    sourcePackage);
+
+        if (!validated.IsSuccess)
+        {
+            return ReviewImportPreparationResult
+                .Failure(
+                    "レビュー結果を検証できませんでした。\n"
+                    + string.Join(
+                        Environment.NewLine,
+                        validated.Errors
+                            .Take(8)
+                            .Select(x =>
+                                x.ExportRef is null
+                                    ? $"{x.Code}: {x.Message}"
+                                    : $"{x.ExportRef} / {x.Code}: {x.Message}")));
+        }
+
+        var liveSession =
+            LastReviewExportSession is { } live
+            && string.Equals(
+                live.Package.ExportSessionId,
+                sourcePackage.ExportSessionId,
+                StringComparison.Ordinal)
+                ? live
+                : null;
+
+        var currentVoices =
+            timeline.Items
+                .OfType<VoiceItem>()
+                .ToArray();
+
+        var plan =
+            ReviewImportPlanner.Build(
+                sourcePackage,
+                validated,
+                currentVoices,
+                liveSession);
+
+        if (!plan.IsSuccess)
+        {
+            return ReviewImportPreparationResult
+                .Failure(
+                    plan.Message
+                    ?? "Import Planを作成できませんでした。");
+        }
+
+        return ReviewImportPreparationResult
+            .Success(plan);
+    }
+
+    public ReviewImportExecutionResult
+        ApplyReviewImport(
+            ReviewImportPlan plan,
+            IReadOnlyCollection<string>
+                selectedExportRefs)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(
+            selectedExportRefs);
+
+        if (undoRedoManager is null)
+        {
+            return ReviewImportExecutionResult
+                .Failure(
+                    "YMM4のUndoRedoManagerを取得できませんでした。");
+        }
+
+        var prepared =
+            ReviewImportApplier.Prepare(
+                plan,
+                selectedExportRefs);
+
+        if (!prepared.IsSuccess
+            || prepared.Journal is null)
+        {
+            return ReviewImportExecutionResult
+                .Failure(
+                    prepared.FailedExportRef is null
+                        ? prepared.Message
+                            ?? "適用準備に失敗しました。"
+                        : $"{prepared.FailedExportRef}: {prepared.Message}");
+        }
+
+        var journal =
+            prepared.Journal;
+
+        try
+        {
+            // Close any pending host record before starting one logical
+            // Voice Review apply unit.
+            undoRedoManager.Record();
+
+            var committed =
+                journal.Commit();
+
+            if (!committed.IsSuccess)
+            {
+                return ReviewImportExecutionResult
+                    .Failure(
+                        committed.FailedExportRef is null
+                            ? committed.Message
+                                ?? "適用に失敗しました。"
+                            : $"{committed.FailedExportRef}: {committed.Message}");
+            }
+
+            undoRedoManager.AddCommand(
+                new UndoRedoActionCommand(
+                    journal.UndoOrThrow,
+                    journal.RedoOrThrow));
+
+            undoRedoManager.Record();
+
+            LastReviewExportSession =
+                null;
+
+            return ReviewImportExecutionResult
+                .Success(
+                    journal.ExportRefs.Count);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                journal.UndoOrThrow();
+            }
+            catch
+            {
+            }
+
+            return ReviewImportExecutionResult
+                .Failure(
+                    "Undo履歴への登録に失敗したため変更を戻しました: "
+                    + ex.GetBaseException().Message);
+        }
+    }
+}
+
+public sealed record ReviewImportPreparationResult(
+    bool IsSuccess,
+    ReviewImportPlan? Plan,
+    string? Message)
+{
+    public static ReviewImportPreparationResult
+        Success(
+            ReviewImportPlan plan) =>
+        new(
+            true,
+            plan,
+            null);
+
+    public static ReviewImportPreparationResult
+        Failure(
+            string message) =>
+        new(
+            false,
+            null,
+            message);
+}
+
+public sealed record ReviewImportExecutionResult(
+    bool IsSuccess,
+    int AppliedCount,
+    string? Message)
+{
+    public static ReviewImportExecutionResult
+        Success(
+            int count) =>
+        new(
+            true,
+            count,
+            null);
+
+    public static ReviewImportExecutionResult
+        Failure(
+            string message) =>
+        new(
+            false,
+            0,
+            message);
 }

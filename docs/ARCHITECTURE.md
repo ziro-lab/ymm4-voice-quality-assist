@@ -562,6 +562,42 @@ CSV/XLSXは、人間向け表示・編集用の派生形式として追加可能
 
 詳細は [REVIEW_BRIDGE.md](REVIEW_BRIDGE.md)。
 
+
+## 6.1 Voice Review import/apply — B3 product-native proven
+
+B3はB2 correction packageをcurrent Timelineへ直接適用する前に、resolutionとpreviewを分離します。
+
+```text
+B1 Export + B2 Correction
+      ↓
+wire/source validation
+      ↓
+current Timeline resolution
+      ├─ EXACT_SESSION
+      ├─ EXACT_FINGERPRINT
+      ├─ STALE
+      ├─ MISSING
+      └─ AMBIGUOUS
+      ↓
+preview + user selection
+      ↓
+whole-batch preflight
+      ↓
+atomic durable source journal
+      ↓
+UndoRedoActionCommand / Record
+      ↓
+Track A re-generation
+```
+
+same-sessionは`exportRef -> live VoiceItem` mapを優先します。frame/layer移動だけではidentityを失いませんが、sourceFingerprintが変わればSTALEです。cross-sessionはB0 fingerprint resolverへfallbackします。
+
+B3 journalはgenerated Pronounce/WAVを保持しません。Undo/Redo対象はSerif / Hatsuon / Assist Effect membership / HelperRulesJson / Prosodyなどdurable sourceのみです。derived audioはTrack A runtimeが再生成します。
+
+boundary rewriteはv0安全境界として通常text + literal `<w0>` のSerifだけを対象にし、他official control tagが混在する場合はfail closedします。
+
+Product-native run `35993465363` では、EXACT apply後にpause=0 + helper vowel=0 + Hold pitchが同じfinal synthesisへ入り、Undoでbaseline WAV、Redoで同一corrected WAVへ戻ることを確認しました。
+
 ## 7. Host integration policy
 
 優先順位:
