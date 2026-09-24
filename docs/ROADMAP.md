@@ -110,7 +110,7 @@ Product native evidence:
 
 ## Track B — Voice Review Bridge
 
-### B0. Interchange design
+### B0. Interchange design — CLOSED / UNIT GREEN
 
 - [x] VoiceItemにpublic安定Guidが無いことをLab確認
 - [x] v0 identity方針: session ref + fingerprint + locator
@@ -119,7 +119,15 @@ Product native evidence:
 - [x] version field Draft
 - [x] source fingerprint canonicalizationをfreeze（UTF-8 canonical JSON + frozen SHA-256 vector）
 - [x] cross-session再解決アルゴリズムをUnit test（exact 1件のみauto-apply、duplicate exactはAMBIGUOUS、locator-onlyはSTALE）
-- [ ] correction proposal validation rules実装
+- [x] correction proposal validation rules実装（schema/session/fingerprint/operation payload/position/conflict）
+
+B0 final verification:
+
+- source `c308d18474ed2afd4360578494708ace8f9805ec`
+- normal build/unit run `35982062464`: 66/66 PASS
+- A1 native regression `35982062549`: GREEN
+- A2 native regression `35982062596`: GREEN
+- A3 native regression `35982062548`: GREEN
 
 ### B1. Export
 
