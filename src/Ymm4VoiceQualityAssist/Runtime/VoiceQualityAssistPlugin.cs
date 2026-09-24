@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Threading;
 using YukkuriMovieMaker.Plugin;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using YukkuriMovieMaker.ViewModels;
 
 namespace Ymm4VoiceQualityAssist.Runtime;
@@ -18,6 +20,8 @@ public sealed class VoiceQualityAssistPlugin : IPlugin, IDisposable
 {
     public string Name => "Voice Quality Assist";
 
+    // Kept for hosts/tools that choose to call it by convention.
+    // The actual startup guarantee is the CLR ModuleInitializer below.
     public void Initialize() =>
         VoiceQualityAssistRuntime.Start();
 
@@ -25,8 +29,16 @@ public sealed class VoiceQualityAssistPlugin : IPlugin, IDisposable
         VoiceQualityAssistRuntime.Stop();
 }
 
+internal static class VoiceQualityAssistModule
+{
+    [ModuleInitializer]
+    internal static void Initialize() =>
+        VoiceQualityAssistRuntime.Start();
+}
+
 internal static class VoiceQualityAssistRuntime
 {
+    static Timer? startupTimer;
     static DispatcherTimer? discoveryTimer;
     static object? mainViewModel;
     static INotifyPropertyChanged? mainNotify;
@@ -41,18 +53,42 @@ internal static class VoiceQualityAssistRuntime
 
         started = true;
 
-        var dispatcher = Application.Current?.Dispatcher
-            ?? Dispatcher.CurrentDispatcher;
+        if (TryScheduleOnApplicationDispatcher())
+            return;
 
-        if (!dispatcher.CheckAccess())
+        // Plugin assemblies can be discovered before WPF Application.Current
+        // exists. Wait without creating a Dispatcher on the loader thread.
+        startupTimer = new Timer(
+            _ => TryScheduleOnApplicationDispatcher(),
+            null,
+            dueTime: 100,
+            period: 250);
+    }
+
+    static bool TryScheduleOnApplicationDispatcher()
+    {
+        if (!started)
+            return true;
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return false;
+
+        startupTimer?.Dispose();
+        startupTimer = null;
+
+        if (dispatcher.CheckAccess())
+        {
+            StartOnDispatcher();
+        }
+        else
         {
             _ = dispatcher.BeginInvoke(
                 new Action(StartOnDispatcher),
                 DispatcherPriority.ApplicationIdle);
-            return;
         }
 
-        StartOnDispatcher();
+        return true;
     }
 
     static void StartOnDispatcher()
@@ -161,6 +197,9 @@ internal static class VoiceQualityAssistRuntime
     internal static void Stop()
     {
         started = false;
+
+        startupTimer?.Dispose();
+        startupTimer = null;
 
         discoveryTimer?.Stop();
         discoveryTimer = null;
