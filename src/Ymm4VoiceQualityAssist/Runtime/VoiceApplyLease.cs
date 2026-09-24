@@ -75,7 +75,7 @@ public sealed class VoiceApplyLease : IDisposable
     {
         if (string.IsNullOrEmpty(e.PropertyName)
             || e.PropertyName is "Serif" or "Hatsuon" or "Character" or "CharacterName"
-                or "VoiceParameter" or "JimakuVideoEffects"
+                or "VoiceParameter" or "JimakuVideoEffects" or "AudioEffects"
             || (outputPinned && e.PropertyName is "Pronounce" or "FilePath" or "VoiceCache"))
             Interlocked.Exchange(ref invalidated, 1);
     }
@@ -87,7 +87,7 @@ public sealed class VoiceApplyLease : IDisposable
         ReviewAssistEffectCollection.Enumerate(voice)
             .Select(e => new EffectInput(e, e.IsEnabled, e.HelperRulesJson, e.Prosody)).ToArray();
 
-    sealed record EffectInput(PronunciationAssistEffect Effect, bool Enabled,
+    sealed record EffectInput(IPronunciationAssistSettings Effect, bool Enabled,
         string Rules, ProsodyGesture Prosody);
 
     public void Dispose()
