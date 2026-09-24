@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using YukkuriMovieMaker.Plugin;
+using System.Reflection;
 using YukkuriMovieMaker.ViewModels;
 
 namespace Ymm4VoiceQualityAssist.Runtime;
@@ -27,7 +28,8 @@ public sealed class VoiceQualityAssistPlugin : IPlugin, IDisposable
 internal static class VoiceQualityAssistRuntime
 {
     static DispatcherTimer? discoveryTimer;
-    static MainViewModel? mainViewModel;
+    static object? mainViewModel;
+    static INotifyPropertyChanged? mainNotify;
     static TimelineViewModel? timelineViewModel;
     static PronunciationAssistController? controller;
     static bool started;
@@ -86,27 +88,29 @@ internal static class VoiceQualityAssistRuntime
         var current = Application.Current?.Windows
             .Cast<Window>()
             .Select(x => x.DataContext)
-            .OfType<MainViewModel>()
-            .FirstOrDefault();
+            .FirstOrDefault(x =>
+                x?.GetType().FullName
+                == "YukkuriMovieMaker.ViewModels.MainViewModel");
 
         if (!ReferenceEquals(current, mainViewModel))
         {
-            if (mainViewModel is not null)
-                mainViewModel.PropertyChanged -= OnMainViewModelPropertyChanged;
+            if (mainNotify is not null)
+                mainNotify.PropertyChanged -= OnMainViewModelPropertyChanged;
 
             mainViewModel = current;
+            mainNotify = current as INotifyPropertyChanged;
 
-            if (mainViewModel is not null)
-                mainViewModel.PropertyChanged += OnMainViewModelPropertyChanged;
+            if (mainNotify is not null)
+                mainNotify.PropertyChanged += OnMainViewModelPropertyChanged;
         }
 
         if (mainViewModel is null)
             return;
 
-        // Once the public MainViewModel is found, property change traffic handles
-        // timeline switches. Keep the timer only as a lightweight guard against
-        // the main window itself being replaced.
-        AttachTimeline(mainViewModel.ActiveTimelineViewModel);
+        // MainViewModel itself is internal in YMM4 4.56.1.0, but its
+        // ActiveTimelineViewModel getter is public. Keep reflection bounded
+        // to that public getter; never traverse private fields here.
+        AttachTimeline(TryGetActiveTimelineViewModel(mainViewModel));
     }
 
     static void OnMainViewModelPropertyChanged(
@@ -117,10 +121,24 @@ internal static class VoiceQualityAssistRuntime
             return;
 
         if (string.IsNullOrEmpty(e.PropertyName)
-            || e.PropertyName == nameof(MainViewModel.ActiveTimelineViewModel))
+            || e.PropertyName == "ActiveTimelineViewModel")
         {
-            AttachTimeline(mainViewModel.ActiveTimelineViewModel);
+            AttachTimeline(
+                TryGetActiveTimelineViewModel(mainViewModel));
         }
+    }
+
+    static TimelineViewModel? TryGetActiveTimelineViewModel(
+        object main)
+    {
+        var property = main.GetType().GetProperty(
+            "ActiveTimelineViewModel",
+            BindingFlags.Instance | BindingFlags.Public);
+
+        if (property?.GetMethod?.IsPublic != true)
+            return null;
+
+        return property.GetValue(main) as TimelineViewModel;
     }
 
     static void AttachTimeline(
@@ -147,9 +165,10 @@ internal static class VoiceQualityAssistRuntime
         discoveryTimer?.Stop();
         discoveryTimer = null;
 
-        if (mainViewModel is not null)
-            mainViewModel.PropertyChanged -= OnMainViewModelPropertyChanged;
+        if (mainNotify is not null)
+            mainNotify.PropertyChanged -= OnMainViewModelPropertyChanged;
 
+        mainNotify = null;
         mainViewModel = null;
         timelineViewModel = null;
 
