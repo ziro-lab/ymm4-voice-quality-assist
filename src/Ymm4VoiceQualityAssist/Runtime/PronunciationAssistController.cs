@@ -183,7 +183,8 @@ public sealed class PronunciationAssistController : IDisposable
 
         if (string.IsNullOrEmpty(propertyName)
             || propertyName == nameof(PronunciationAssistEffect.IsEnabled)
-            || propertyName == nameof(PronunciationAssistEffect.HelperRulesJson))
+            || propertyName == nameof(PronunciationAssistEffect.HelperRulesJson)
+            || propertyName == nameof(PronunciationAssistEffect.Prosody))
         {
             QueueScan();
         }
@@ -201,7 +202,8 @@ public sealed class PronunciationAssistController : IDisposable
         var markers = service.ParseMarkers(voice);
         var hasMarkers = markers.ZeroWaitPositions.Count > 0;
         var hasHelpers = service.HasHelperConfiguration(voice);
-        var hasCorrections = hasMarkers || hasHelpers;
+        var hasProsody = service.HasProsodyConfiguration(voice);
+        var hasCorrections = hasMarkers || hasHelpers || hasProsody;
 
         if (!hasEffect)
         {
@@ -298,7 +300,7 @@ public sealed class PronunciationAssistController : IDisposable
             "",
             EnumerateAssistEffects(voice)
                 .Select(x =>
-                    $"{x.IsEnabled}:{x.HelperRulesJson}"));
+                    $"{x.IsEnabled}:{x.HelperRulesJson}:{x.Prosody}"));
 
         return string.Join(
             "",
