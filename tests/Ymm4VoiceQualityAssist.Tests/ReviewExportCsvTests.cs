@@ -99,7 +99,11 @@ public sealed class ReviewExportCsvTests
                                             "A",
                                             "B"),
                                     ]),
-                            ])),
+                            ]),
+                        new ReviewVoicePronunciationSummary(
+                            true,
+                            "エービー",
+                            1)),
                 ]);
 
         var csv =
@@ -162,6 +166,10 @@ public sealed class ReviewExportCsvTests
                         []),
                     new ReviewVoiceAssistSettings(
                         false,
-                        [])),
+                        []),
+                    new ReviewVoicePronunciationSummary(
+                        false,
+                        null,
+                        null)),
             ]);
 }
