@@ -100,7 +100,14 @@ try {
       'consonant_persisted_source_unchanged',
       'combined_voice_added',
       'combined_a1_a2_applied',
-      'combined_persisted_source_unchanged'
+      'combined_persisted_source_unchanged',
+      'reload_voice_added',
+      'reload_initial_helper_applied',
+      'reload_project_a_saved',
+      'reload_source_survives',
+      'reload_effect_rules_exact',
+      'reload_fixture_speaker_rebound',
+      'reload_helper_reapplied'
     )
 
     if($r.requirements.Count-ne$required.Count){
