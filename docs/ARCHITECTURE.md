@@ -66,6 +66,14 @@ Operator == Set
 
 非ゼロwait（例: `<w100>`）は発音境界として扱いません。
 
+### Boundary mapping safety
+
+Lab PR #136で、Serif-only `<w0>`はYMM4/VOICEVOXの生成経路を自動的にAccentPhrase境界へ変換しないことを確認しました。
+
+そのため、Serifのclean-text位置をそのままVOICEVOX mora indexとして扱いません。A1では、同じactive voice providerが返すreadingへ境界を写像し、現在のHatsuon / AudioQuery mora列に**一意かつexactに対応する場合だけ**PauseMoraを対象にします。
+
+対応不能・不一致・複数候補はfail closedとし、自動変更しません。
+
 ## 4. Local correction pipeline
 
 ```text
