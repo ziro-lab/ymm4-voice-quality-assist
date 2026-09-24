@@ -1,16 +1,16 @@
 # Source Fingerprint v0
 
-Status: **CANDIDATE / ready for unit validation**
+Status: **FROZEN / UNIT-COVERED**
 
-Voice Review Bridgeでcross-session Importのstale判定・再解決に使うfingerprint案です。
+Voice Review Bridgeでcross-session Importのstale判定・再解決に使うfingerprintです。
 
 ## Goal
 
-レビュー対象の意味内容が変わったときだけfingerprintを変え、単なるタイムライン移動では変えません。
+レビュー対象の意味内容・発音補助sourceが変わったときfingerprintを変え、単なるタイムライン移動やEffect/list順序変更では変えません。
 
 ## Canonical input
 
-v0では次の4要素だけを対象にします。
+v0のcanonical JSONは次の固定形です。
 
 ```json
 {
@@ -18,7 +18,21 @@ v0では次の4要素だけを対象にします。
   "serif": "...",
   "hatsuon": "...",
   "assistSource": {
-    "enabled": true
+    "enabled": true,
+    "profiles": [
+      {
+        "prosody": "lightRise",
+        "helperRules": [
+          {
+            "kind": "zeroVowel",
+            "helper": "ウ",
+            "position": 2,
+            "left": "東京",
+            "right": "大学"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -28,7 +42,12 @@ v0では次の4要素だけを対象にします。
 - `characterName`
 - stored `Serif` exactly as authored
 - current `Hatsuon`
-- source-level assist state that changes pronunciation interpretation
+- enabled Voice Quality Assist Effect profiles
+  - canonical helper rules
+  - current A3 prosody gesture
+- Assist enabled/disabled semantic state
+
+`<w0>` is already part of stored Serif, so it is not duplicated as derived boundary data.
 
 ### Excluded
 
@@ -37,26 +56,35 @@ v0では次の4要素だけを対象にします。
 - length
 - selection state
 - generated VoiceCache
+- generated Pronounce / pitch values
 - preview state
 - exportIndex / exportRef
 - derived cleanText
 - derived boundary positions
+- disabled Assist Effect configuration
 - LLM proposal/result
 
-Derived values are excluded because they can always be recomputed from the stored source.
+Derived values are excluded because they can be recomputed. Disabled Assist configuration is excluded because it does not change the current pronunciation source; enabling it changes `assistSource` and therefore changes the fingerprint.
 
-## Normalization
+## Canonicalization
 
-Before hashing:
-
-1. UTF-8 encoding
+1. UTF-8 JSON
 2. fixed property order
-3. JSON without insignificant whitespace
+3. no insignificant whitespace
 4. null is preserved as JSON `null`
 5. strings are **not** trimmed
-6. Unicode normalization is **not** silently applied in v0
+6. Unicode normalization is **not** silently applied
+7. JSON writer keeps ordinary Japanese unescaped; supplementary Unicode such as emoji follows `Utf8JsonWriter` canonical surrogate escaping (for example `\\uD83D\\uDE00`)
+8. enabled Assist profiles are sorted by their canonical representation
+9. helper rules inside each profile are sorted by:
+   - position
+   - left
+   - right
+   - kind
+   - helper
+10. duplicate profiles/rules are preserved; only ordering is normalized
 
-文字列を勝手にtrim/NFC変換しない理由は、YMM4上の実入力との差を隠さないためです。
+Malformed enabled `HelperRulesJson` fails fingerprint construction. The exporter must not silently hash a degraded source representation.
 
 ## Hash
 
@@ -64,27 +92,66 @@ Before hashing:
 sha256:<lowercase-hex>
 ```
 
+### Frozen test vector
+
+Input:
+
+- characterName: `小夜`
+- Serif: `東京<w0>大学\n😀`
+- Hatsuon: `トウキョウダイガク`
+- prosody: `lightRise`
+- helper: `zeroVowel ウ` at position 2, left `東京`, right `大学`
+
+Canonical JSON:
+
+```json
+{"characterName":"小夜","serif":"東京<w0>大学\n\uD83D\uDE00","hatsuon":"トウキョウダイガク","assistSource":{"enabled":true,"profiles":[{"prosody":"lightRise","helperRules":[{"kind":"zeroVowel","helper":"ウ","position":2,"left":"東京","right":"大学"}]}]}}
+```
+
+Fingerprint:
+
+```text
+sha256:7fa3f4e31c268876868cf51eb70ab2933326684e3eef5847cce6d70cbddb8274
+```
+
 ## Re-resolution policy
 
-cross-session Importでは:
+cross-session Import:
 
 1. exact fingerprint matchesを集める
-2. 1件なら `EXACT_FINGERPRINT_MATCH`
-3. 0件なら locator/contextを使って候補探索するが、自動適用はしない
-4. 複数件なら `AMBIGUOUS`
+2. exact matchが1件 → `EXACT_FINGERPRINT_MATCH` / auto-apply candidate
+3. exact matchが複数 → `AMBIGUOUS`
+4. exact matchが0件 → locator/contextで候補探索
+5. locatorが1件 → `STALE`（候補は示せるがauto-apply禁止）
+6. locatorが0件 → `MISSING`
+7. locatorが複数 → `AMBIGUOUS`
 
-locator/contextから一意候補が見つかっても、fingerprint不一致なら `STALE` として確認を要求します。
+**複数のexact fingerprintをframe/layer等で自動的に1件へ絞りません。** 同一台詞の重複配置で誤適用するより、明示確認を要求します。
 
-## Why not include frame/layer
+## Locator fields
 
-レビュー中にVoiceItemを移動しただけでproposalが無効になるのを避けるためです。
+v0 resolverは必要に応じて次をexact filterとして使えます。
 
-## Next validation
+- frame
+- layer
+- characterName
+- previous Serif
+- next Serif
 
-- canonical JSON test vectors
-- 日本語/改行/制御タグ
-- emoji / surrogate pair
-- null vs empty string
-- same content at different frame/layer produces same hash
-- Serif/Hatsuon変更でhashが変わる
-- assist source state変更でhashが変わる
+locatorはidentityそのものではなく、STALE/MISSING/AMBIGUOUSを説明・候補化するための補助情報です。
+
+## Unit coverage
+
+- frozen canonical JSON + SHA-256 vector
+- Japanese / control tag / newline / emoji
+- null vs empty
+- whitespace preservation
+- composed vs decomposed Unicode
+- assist profile / helper rule ordering independence
+- character / Serif / Hatsuon changes
+- prosody / helper changes
+- one exact match
+- duplicate exact match
+- unique stale locator
+- missing locator
+- ambiguous locator

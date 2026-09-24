@@ -1,6 +1,6 @@
 # Review Bridge schema v0
 
-Status: **DRAFT / CANDIDATE**
+Status: **DRAFT overall / B0 identity + validation FROZEN**
 
 この文書はVoice Review Bridgeの最初の交換形式を具体化します。
 
@@ -43,33 +43,35 @@ package側:
 }
 ```
 
-### Cross-session re-resolution
+### Cross-session re-resolution — FROZEN
 
 YMM4を閉じた後にImportする場合は、`exportRef`だけでは足りません。
-次を使って再解決します。
 
-1. `sourceFingerprint` 完全一致
-2. frame/layer/character/contextをlocatorとして候補絞り込み
-3. 一意なら適用候補
-4. 0件なら`MISSING`
-5. 複数件なら`AMBIGUOUS`
+1. exact `sourceFingerprint` matchが1件 → `EXACT_FINGERPRINT_MATCH` / auto-apply candidate
+2. exact matchが複数 → `AMBIGUOUS`
+3. exact matchが0件 → frame/layer/character/previous/next contextをlocatorとして探索
+4. locatorが1件 → `STALE`（候補提示のみ、自動適用禁止）
+5. locatorが0件 → `MISSING`
+6. locatorが複数 → `AMBIGUOUS`
 
-`AMBIGUOUS`は自動適用しません。
+複数のexact fingerprintをlocatorで自動的に1件へ絞りません。重複台詞の誤適用を避けるためです。
 
 ## 3. Source fingerprint
 
 `sourceFingerprint` はstale proposal検知とcross-session再解決の中核です。
 
-v0 candidate input:
+v0 frozen input:
 
 ```text
 characterName
-serif
-hatsuon
-assist-relevant source controls
+stored Serif
+current Hatsuon
+enabled Assist profiles
+  ├─ canonical helper rules
+  └─ prosody gesture
 ```
 
-をcanonical JSONへ正規化し、SHA-256を計算する案です。
+をfixed-order UTF-8 canonical JSONへ変換し、SHA-256を計算します。Assist Effect / helper ruleの単なる並び順は正規化します。文字列はtrimやUnicode normalizationを行いません。詳細とfrozen hash vectorは [FINGERPRINT_V0.md](FINGERPRINT_V0.md)。
 
 原則含めない:
 
@@ -140,7 +142,7 @@ v0 operation候補:
 位置はcontrol-tag除去後のclean text上のUTF-16 indexをv0候補とします。
 Unicode境界問題は実装前に日本語・絵文字・サロゲートペアで確認します。
 
-## 6. Import resolution states
+## 6. Import resolution states — FROZEN
 
 - `EXACT_SESSION_MATCH`
 - `EXACT_FINGERPRINT_MATCH`
@@ -148,20 +150,34 @@ Unicode境界問題は実装前に日本語・絵文字・サロゲートペア�
 - `MISSING`
 - `AMBIGUOUS`
 
-`STALE / MISSING / AMBIGUOUS` は自動適用しません。
+auto-apply可能なのはexact session / exact fingerprintの一意解決だけです。`STALE / MISSING / AMBIGUOUS` は自動適用しません。
 
-## 7. Import validation
+## 7. Import validation — B0 core FROZEN
 
-最低限:
+typed validation coreでImport前に次を拒否します。
 
-1. schema/version一致
-2. exportSessionId整合
-3. target解決
-4. sourceFingerprint一致
-5. operation type既知
-6. operation payload妥当
-7. cleanTextPosition範囲内
-8. before/after diff生成
+1. schema mismatch
+2. exportSessionId missing / mismatch
+3. exportRef missing
+4. sourceFingerprint format mismatch
+5. resolved source fingerprint mismatch
+6. operation 0件
+7. unknown operation
+8. `noChange` と他operationの混在
+9. 複数 `setReading`
+10. empty reading
+11. 複数 `setProsodyGesture`
+12. unsupported prosody
+13. add/remove boundaryの非interior位置
+14. duplicate boundary operation
+15. 同一位置へのadd/remove conflict
+16. helper position範囲外
+17. normalize後empty helper
+18. 同一clean-text boundaryへの複数helper
+
+boundaryはA1仕様に合わせてclean textの**interior**のみ。helperはA2仕様に合わせて0〜cleanTextLengthの境界を許可します。
+
+before/after diff生成、JSON wire parsing、実YMM4 mutation、Undo単位化はB1/B3側です。
 
 ## 8. JSON / XLSX split
 
