@@ -1,0 +1,56 @@
+name: A1 Zero-pause MVP
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/a1-zero-pause-mvp']
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/a1-zero-pause-mvp.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a1-zero-pause-mvp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Prepare pinned YMM4 4.56.1.0 Lite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          curl.exe -L --fail --retry 2 --silent --show-error -o ymm4.zip https://github.com/manju-summoner/YukkuriMovieMaker4/releases/download/v4.56.1.0/YukkuriMovieMaker_v4.56.1.0_Lite.zip
+          if($LASTEXITCODE-ne0){throw 'YMM4 download failed'}
+          $expected='49c0ed689f545737b7ce939971bfc625962e00791c57883dc8e6f058aa336c5a'
+          $actual=(Get-FileHash ymm4.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($actual-ne$expected){throw "YMM4 hash mismatch: $actual"}
+          Expand-Archive ymm4.zip ymm4
+          $exe=Get-ChildItem ymm4 -Recurse -Filter YukkuriMovieMaker.exe|Select-Object -First 1
+          if($null-eq$exe){throw 'YMM4 executable not found'}
+          "YMM4_DIR=$($exe.Directory.FullName)\"|Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build product
+        shell: pwsh
+        run: |
+          dotnet build src/Ymm4VoiceQualityAssist/Ymm4VoiceQualityAssist.csproj -c Release "-p:YMM4DirPath=$env:YMM4_DIR" --nologo -warnaserror
+          if($LASTEXITCODE-ne0){throw 'Product build failed'}
+
+      - name: Run tests
+        if: ${{ hashFiles('tests/**/*.csproj') != '' }}
+        shell: pwsh
+        run: |
+          Get-ChildItem tests -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet test $_.FullName -c Release "-p:YMM4DirPath=$env:YMM4_DIR" --nologo
+            if($LASTEXITCODE-ne0){throw "Tests failed: $($_.FullName)"}
+          }
