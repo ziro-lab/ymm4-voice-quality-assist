@@ -33,7 +33,7 @@ Apply + regenerate
 - 自動適用前に人間が確認できる
 - Local Assist単体利用を妨げない
 
-## 4. Export package — draft
+## 4. Export package — B1 FROZEN
 
 canonical形式はJSONを第一候補にします。
 
@@ -57,6 +57,11 @@ canonical形式はJSONを第一候補にします。
   ]
 }
 ```
+
+
+B1製品実装では、現在TimelineのVoiceItemをFrame → Layer → original input orderで安定ソートし、`voice-000000`形式のexportRefを付与します。packageにはB0 fingerprint、speaker API/ID、前後Serif context、official control解析結果、enabled Assist helper/prosody、optional generated pronunciation summaryを含めます。
+
+同じYMM4セッション中は、export packageとは別にPlugin内部で `exportRef -> live VoiceItem` mapを保持します。
 
 ## 5. Stable target identity
 
@@ -110,11 +115,15 @@ B3で実装するUI/apply境界:
 - free-form codeを実行しない
 - 可能なら一つのUndo単位へまとめる
 
-## 8. Human-readable formats
+## 8. Human-readable formats — B1
 
-JSONをcanonicalとしつつ、レビュー用途としてCSV/XLSXを追加できます。
+JSONがcanonicalです。
 
-XLSXは1行1Voiceで、元Serif・Hatsuon・前後文・LLM提案・採用/却下を見やすくする派生ビューにします。
+B1では閲覧用CSVを実装済みです。1行1Voiceで、target、character/speaker、前後Serif、Serif/Hatsuon、cleanText/boundary、prosody/helper、generated pronunciation summary、source fingerprintを固定列順で出力します。
+
+ToolからJSON/CSVのSaveFileDialogを開けます。JSONはUTF-8、CSVは表計算ソフトで扱いやすいUTF-8 BOM付きで保存します。
+
+CSVはImport正本ではありません。XLSXは必要なら将来追加できますがB1完了条件ではありません。
 
 ## 9. LLM responsibilities
 

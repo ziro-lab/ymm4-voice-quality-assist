@@ -1,6 +1,6 @@
 # Review Bridge schema v0
 
-Status: **DRAFT overall / B0 identity + validation FROZEN**
+Status: **DRAFT overall / B0 identity+validation and B1 export package FROZEN**
 
 この文書はVoice Review Bridgeの最初の交換形式を具体化します。
 
@@ -83,34 +83,56 @@ enabled Assist profiles
 
 理由は、VoiceItemを移動しただけでレビュー内容までstaleにしたくないためです。
 
-## 4. Export package
+## 4. Export package — B1 FROZEN
 
 schema: `ymm4.voice-review.v0`
 
-top-level required:
+top-level:
 
-- schema
-- exportSessionId
-- exportedAt
-- voices
+- `schema`
+- `exportSessionId`
+- `exportedAt`（UTC）
+- `voices`
 
-Voice record required:
+Voice record:
 
-- target
-- sourceFingerprint
-- characterName
-- serif
-- hatsuon
-- context
-- controls
+- `target`
+  - `exportRef`
+  - `exportIndex`
+  - `frame`
+  - `layer`
+- `sourceFingerprint`
+- `characterName`
+- `speaker`
+  - `api`
+  - `id`
+- `serif`
+- `hatsuon`
+- `context`
+  - `previousSerif`
+  - `nextSerif`
+- `controls`
+  - `cleanText`
+  - `boundaries[] { position, source }`
+- `assist`
+  - `enabled`
+  - canonical enabled Assist profiles（helper rules + prosody）
+- `pronunciation`
+  - `hasGeneratedPronounce`
+  - optional `generatedMoraReading`
+  - optional `accentPhraseCount`
+
+並び順は `Frame -> Layer -> original input order`。Export後の各recordには0-based indexから `voice-000000` 形式のexportRefを振る。
+
+same-sessionではpackageとは別にPlugin内部で `exportRef -> live VoiceItem` mapを保持する。
 
 ### Context
 
-LLMが文脈読みを判断できるよう、最低限前後Voiceの文章を持たせます。
+LLMが文脈読みを判断できるよう、export順に前後VoiceのSerifを持たせる。
 
 ### Derived official control information
 
-Local parserで取れる情報はLLMに再解析させません。
+Local parserで取れる情報はLLMに再解析させない。
 
 ```json
 "controls": {
@@ -120,6 +142,11 @@ Local parserで取れる情報はLLMに再解析させません。
   ]
 }
 ```
+
+### Failure policy
+
+enabled Assist Effectのhelper JSONが壊れているなど、B0 fingerprint materialを正確に作れないVoiceが1件でもあればwhole exportをfail closedする。劣化したpackageを黙って出力しない。
+
 
 ## 5. Correction proposal
 
@@ -179,7 +206,10 @@ boundaryはA1仕様に合わせてclean textの**interior**のみ。helperはA2�
 
 before/after diff生成、JSON wire parsing、実YMM4 mutation、Undo単位化はB1/B3側です。
 
-## 8. JSON / XLSX split
+## 8. JSON / human-readable split — B1 FROZEN
 
-canonicalはJSON。XLSX / CSVはhuman review用の派生ビューにします。
-XLSXだけではnested operationや将来versioningを保持しづらいため、canonicalにはしません。
+canonicalはJSON。
+
+B1ではhuman review用の派生viewとしてCSVを実装済み。固定列順・全field quote・quote doubling・CRLFで出力し、Tool保存時はUTF-8 BOM付きで書き出す。
+
+CSVはnested helper/prosodyを平坦化した閲覧用であり、Importのcanonical sourceにはしない。XLSXは必要なら将来追加するがB1完了条件ではない。
