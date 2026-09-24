@@ -498,6 +498,39 @@ transient augmented readingをVOICEVOX解析した後は、各helperの「挿入
 
 Product PR #3のnative smokeでは、source先頭追加後のanchor relocation、曖昧context時のbaseline復帰、zeroVowel x2、zeroConsonant + vowel保持、A1 `<w0>`との同居、native project save/reload後のhelper rule復元と自動再適用までGREENです。
 
+## 5.9 Baseline-relative prosody — A3 product-native proven
+
+Lab PR #141で、real VoiceItemのfresh built-in VOICEVOX Pronounceに対してpublic `Mora.Pitch`を相対変更し、そのままpublic `IVoiceSpeaker.CreateVoiceAsync`へ渡せることを確認しました。製品A3は固定absolute pitchを使わず、fresh baselineへ小さいgesture curveを重ねます。
+
+MVP:
+
+- `None`
+- `LightRise`: voiced target列へ `-0.08 .. +0.08` の線形offset
+- `LightFall`: voiced target列へ `+0.08 .. -0.08` の線形offset
+- `Hold`: baseline meanへ偏差を50%だけ縮める
+
+処理順:
+
+```text
+fresh / transient VOICEVOX Pronounce
+        ↓
+A2 helper mutation
+        ↓
+A1 zero-pause mutation
+        ↓
+A3 baseline-relative pitch mutation
+        ↓
+1回のfinal public synthesis
+        ↓
+real VoiceItem.FilePath
+```
+
+A2のzero-vowel helperがpitch curveのmora countを歪めないよう、`Pitch > 0` かつ `VowelLength > 0` のmoraだけをprosody targetにします。複数enabled Assist Effectが異なるprosody gestureを指定する場合はfail closedします。
+
+`PronunciationAssistEffect.Prosody` をdurable source of truthとし、生成済みPitch/Pronounce/WAVはderived runtime stateです。Product PR #4のnative smokeではLightRise→LightFall→None→Hold、Effect disable/re-enable、real project save/reload後のexact `Prosody=Hold`復元とautomatic reapplyまでGREENです。
+
+A3 final evidence: run `35979300166`, artifact `10799671345`.
+
 ## 6. Voice Review Bridge
 
 LLMとの初期連携はYMM4内部へLLMを常駐させず、Export/Import方式を優先します。
