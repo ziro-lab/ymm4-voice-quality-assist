@@ -27,11 +27,13 @@ public sealed class PronunciationAssistToolView : UserControl
     {
         Json,
         Csv,
+        LlmPrompt,
     }
 
     readonly TextBlock status;
     readonly Button jsonExportButton;
     readonly Button csvExportButton;
+    readonly Button llmPromptExportButton;
 
     public PronunciationAssistToolView()
     {
@@ -46,7 +48,7 @@ public sealed class PronunciationAssistToolView : UserControl
         {
             Text =
                 "発音補助のバックグラウンド監視は自動で動作します。\n"
-                + "Voice Reviewは、JSONを正本としてLLM/Import用に、CSVを人間向け閲覧用に書き出せます。",
+                + "Voice ReviewはJSON正本、閲覧用CSV、LLMへそのまま渡せるレビュー指示ファイルを書き出せます。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
         };
@@ -70,11 +72,24 @@ public sealed class PronunciationAssistToolView : UserControl
             Padding = new Thickness(10, 6, 10, 6),
             HorizontalAlignment = HorizontalAlignment.Left,
             MinWidth = 230,
+            Margin = new Thickness(0, 0, 0, 6),
         };
         csvExportButton.Click +=
             async (_, _) =>
                 await ExportAsync(
                     ReviewExportFileFormat.Csv);
+
+        llmPromptExportButton = new Button
+        {
+            Content = "LLMレビュー用プロンプトをエクスポート",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 230,
+        };
+        llmPromptExportButton.Click +=
+            async (_, _) =>
+                await ExportAsync(
+                    ReviewExportFileFormat.LlmPrompt);
 
         status = new TextBlock
         {
@@ -92,6 +107,7 @@ public sealed class PronunciationAssistToolView : UserControl
                 description,
                 jsonExportButton,
                 csvExportButton,
+                llmPromptExportButton,
                 status,
             },
         };
@@ -134,28 +150,56 @@ public sealed class PronunciationAssistToolView : UserControl
                 return;
             }
 
-            var isJson =
-                format == ReviewExportFileFormat.Json;
+            var title = format switch
+            {
+                ReviewExportFileFormat.Json =>
+                    "Voice Review JSONを保存",
+                ReviewExportFileFormat.Csv =>
+                    "Voice Review CSVを保存",
+                ReviewExportFileFormat.LlmPrompt =>
+                    "LLMレビュー用プロンプトを保存",
+                _ =>
+                    throw new ArgumentOutOfRangeException(
+                        nameof(format)),
+            };
+
+            var filter = format switch
+            {
+                ReviewExportFileFormat.Json =>
+                    "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*",
+                ReviewExportFileFormat.Csv =>
+                    "CSVファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*",
+                ReviewExportFileFormat.LlmPrompt =>
+                    "テキストファイル (*.txt)|*.txt|すべてのファイル (*.*)|*.*",
+                _ =>
+                    throw new ArgumentOutOfRangeException(
+                        nameof(format)),
+            };
+
+            var extension = format switch
+            {
+                ReviewExportFileFormat.Json =>
+                    ".json",
+                ReviewExportFileFormat.Csv =>
+                    ".csv",
+                ReviewExportFileFormat.LlmPrompt =>
+                    ".txt",
+                _ =>
+                    throw new ArgumentOutOfRangeException(
+                        nameof(format)),
+            };
 
             var dialog = new SaveFileDialog
             {
-                Title = isJson
-                    ? "Voice Review JSONを保存"
-                    : "Voice Review CSVを保存",
-                Filter = isJson
-                    ? "JSONファイル (*.json)|*.json|すべてのファイル (*.*)|*.*"
-                    : "CSVファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*",
-                DefaultExt = isJson
-                    ? ".json"
-                    : ".csv",
+                Title = title,
+                Filter = filter,
+                DefaultExt = extension,
                 AddExtension = true,
                 FileName =
                     "ymm4-voice-review-"
                     + DateTime.Now.ToString(
                         "yyyyMMdd-HHmmss")
-                    + (isJson
-                        ? ".json"
-                        : ".csv"),
+                    + extension,
                 OverwritePrompt = true,
             };
 
@@ -166,27 +210,48 @@ public sealed class PronunciationAssistToolView : UserControl
                 return;
             }
 
-            var text = isJson
-                ? ReviewExportJson.Serialize(
-                    prepared.Session.Package)
-                : ReviewExportCsv.Serialize(
-                    prepared.Session.Package);
+            var text = format switch
+            {
+                ReviewExportFileFormat.Json =>
+                    ReviewExportJson.Serialize(
+                        prepared.Session.Package),
+                ReviewExportFileFormat.Csv =>
+                    ReviewExportCsv.Serialize(
+                        prepared.Session.Package),
+                ReviewExportFileFormat.LlmPrompt =>
+                    ReviewLlmPrompt.Build(
+                        prepared.Session.Package),
+                _ =>
+                    throw new ArgumentOutOfRangeException(
+                        nameof(format)),
+            };
 
             await File.WriteAllTextAsync(
                 dialog.FileName,
                 text,
                 new UTF8Encoding(
                     encoderShouldEmitUTF8Identifier:
-                        !isJson));
+                        format
+                        == ReviewExportFileFormat.Csv));
 
             viewModel.CommitReviewExport(
                 prepared.Session);
 
+            var formatLabel = format switch
+            {
+                ReviewExportFileFormat.Json =>
+                    "JSON",
+                ReviewExportFileFormat.Csv =>
+                    "CSV",
+                ReviewExportFileFormat.LlmPrompt =>
+                    "LLMレビュー用プロンプト",
+                _ =>
+                    format.ToString(),
+            };
+
             status.Text =
                 $"{prepared.Session.Package.Voices.Count}件のVoiceItemを"
-                + (isJson
-                    ? "JSON"
-                    : "CSV")
+                + formatLabel
                 + "へ書き出しました。\n"
                 + dialog.FileName;
         }
@@ -207,6 +272,7 @@ public sealed class PronunciationAssistToolView : UserControl
     {
         jsonExportButton.IsEnabled = enabled;
         csvExportButton.IsEnabled = enabled;
+        llmPromptExportButton.IsEnabled = enabled;
     }
 }
 

@@ -80,18 +80,32 @@ exact matchが0件の場合だけframe/layer/character/previous/next contextをl
 
 詳細は [SCHEMA_V0.md](SCHEMA_V0.md)。
 
-## 6. Correction Proposal — draft
+## 6. Correction Proposal — B2 FROZEN
 
 LLMは完成プロジェクトではなく構造化された修正命令を返します。
 
-operation候補:
+canonical operation:
 
-- reading override
-- add/remove boundary
-- helper vowel zero
-- helper consonant zero
-- optional prosody gesture
-- no-change
+- `setReading`
+- `addBoundary`
+- `removeBoundary`
+- `helperVowelZero`
+- `helperConsonantZero`
+- `setProsodyGesture`
+- `noChange`
+
+B2ではLLMレビュー指示を製品側で決定的に生成します。Export packageをそのまま埋め込み、読み・固有名詞/技術語・句境界・helper・軽いprosodyを確認させます。
+
+responseは全export Voiceをexactly once含め、変更不要でも `noChange` を明示します。返却はJSONのみで、説明文・Markdown fence・free-form codeをcanonical responseへ混ぜません。
+
+
+### B2 validation boundary
+
+LLM responseは `ymm4.voice-corrections.v0` wire packageとしてdecodeし、元B1 Exportに対してexportSessionId / exportRef / sourceFingerprint / complete coverageを照合します。その後B0 typed validatorを再利用してoperation payload・position・conflictを検証します。
+
+B2では**YMM4 Timelineを変更しません**。現在sourceへの再解決、before/after diff、ユーザー選択、apply/UndoはB3です。
+
+Toolには「LLMレビュー用プロンプトをエクスポート」を追加し、review package + frozen instructionsを1つのtext fileとして保存できます。
 
 ## 7. Import safety
 
