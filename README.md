@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **Track A A1–A3 product-native green / early prototype**  
+> Status: **Track A A1–A3 + Track B B0–B1 green / early prototype**  
 > 現時点では配布版プラグインはありません。
 
 ## 二本柱
@@ -133,7 +133,19 @@ A3 final native chain:
 - artifact `10799671345`
 - SHA256 `5747b60beb3642e4e312034abf7fae0ce9326efa5c4b4919e7c54414b48c21e8`
 
-Track Aの当初MVP範囲（A0〜A3）は閉じました。次の主作業は **Track B / Voice Review Bridge**。実機スピーカー知覚確認は引き続きnon-blocking hands-on acceptanceです。
+Track Aの当初MVP範囲（A0〜A3）は閉じました。
+
+Track BもB0 identity/fingerprint/validationに続いて、B1 Exportまで実装済みです。現在TimelineのVoiceItemをcanonical `ymm4.voice-review.v0` JSONへ書き出し、same-session live target mapを保持できます。ToolからJSON正本と人間向けCSVを保存できます。
+
+B1 final verification:
+
+- source `3c58905043f125f38ef5b0e00bd173b99dda9215`
+- build/unit `35985287715`: 79/79 PASS / 0 warnings / 0 errors
+- A1 native `35985287788`: GREEN
+- A2 native `35985287645`: GREEN
+- A3 native `35985287677`: GREEN
+
+次の主作業は **B2 LLM review workflow**。実機スピーカー知覚確認とSaveFileDialog/CSVの見た目確認はnon-blocking hands-on acceptanceです。
 
 ## Documents
 
