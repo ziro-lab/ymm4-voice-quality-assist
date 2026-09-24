@@ -830,8 +830,11 @@ internal sealed class PreparedVoiceChange
         string? hatsuon,
         bool after)
     {
-        voice.Serif = serif;
-        voice.Hatsuon = hatsuon;
+        voice.Serif =
+            serif ?? string.Empty;
+
+        voice.Hatsuon =
+            hatsuon ?? string.Empty;
 
         foreach (var effect
             in effects)
