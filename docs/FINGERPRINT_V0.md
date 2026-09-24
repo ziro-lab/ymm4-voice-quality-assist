@@ -74,7 +74,7 @@ Derived values are excluded because they can be recomputed. Disabled Assist conf
 4. null is preserved as JSON `null`
 5. strings are **not** trimmed
 6. Unicode normalization is **not** silently applied
-7. JSON writer uses unescaped UTF-8 for normal Japanese/emoji characters
+7. JSON writer keeps ordinary Japanese unescaped; supplementary Unicode such as emoji follows `Utf8JsonWriter` canonical surrogate escaping (for example `\\uD83D\\uDE00`)
 8. enabled Assist profiles are sorted by their canonical representation
 9. helper rules inside each profile are sorted by:
    - position
@@ -105,13 +105,13 @@ Input:
 Canonical JSON:
 
 ```json
-{"characterName":"小夜","serif":"東京<w0>大学\n😀","hatsuon":"トウキョウダイガク","assistSource":{"enabled":true,"profiles":[{"prosody":"lightRise","helperRules":[{"kind":"zeroVowel","helper":"ウ","position":2,"left":"東京","right":"大学"}]}]}}
+{"characterName":"小夜","serif":"東京<w0>大学\n\uD83D\uDE00","hatsuon":"トウキョウダイガク","assistSource":{"enabled":true,"profiles":[{"prosody":"lightRise","helperRules":[{"kind":"zeroVowel","helper":"ウ","position":2,"left":"東京","right":"大学"}]}]}}
 ```
 
 Fingerprint:
 
 ```text
-sha256:c60391f9267827b1d5297e5abf17df5d97d9ad7f5d5882d63f76122978138d0a
+sha256:7fa3f4e31c268876868cf51eb70ab2933326684e3eef5847cce6d70cbddb8274
 ```
 
 ## Re-resolution policy
