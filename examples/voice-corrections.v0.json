@@ -1,0 +1,28 @@
+{
+  "schema": "ymm4.voice-corrections.v0",
+  "exportSessionId": "session-20260923-example",
+  "corrections": [
+    {
+      "target": {
+        "exportRef": "voice-000000",
+        "exportIndex": 0
+      },
+      "expectedSourceFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "operations": [
+        {
+          "type": "setReading",
+          "value": "このあとゲートをぬけます"
+        },
+        {
+          "type": "addBoundary",
+          "cleanTextPosition": 4
+        }
+      ],
+      "review": {
+        "source": "llm",
+        "confidence": "medium",
+        "reason": "文脈上ここで句を分ける候補"
+      }
+    }
+  ]
+}

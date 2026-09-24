@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ziro-lab/ymm4-voice-quality-assist/schemas/voice-review-package.v0.schema.json",
+  "title": "YMM4 Voice Review Package v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "exportSessionId",
+    "exportedAt",
+    "voices"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ymm4.voice-review.v0"
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "voices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/voice"
+      }
+    },
+    "exportSessionId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exportRef",
+        "exportIndex",
+        "frame",
+        "layer"
+      ],
+      "properties": {
+        "exportIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "layer": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exportRef": {
+          "type": "string",
+          "pattern": "^voice-[0-9]{6}$"
+        }
+      }
+    },
+    "neighbor": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "characterName",
+        "serif"
+      ],
+      "properties": {
+        "characterName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serif": {
+          "type": "string"
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "source"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "enum": [
+            "w0"
+          ]
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "sourceFingerprint",
+        "characterName",
+        "serif",
+        "hatsuon",
+        "context",
+        "controls"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "sourceFingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "characterName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "speaker": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "serif": {
+          "type": "string"
+        },
+        "hatsuon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "previous",
+            "next"
+          ],
+          "properties": {
+            "previous": {
+              "$ref": "#/$defs/neighbor"
+            },
+            "next": {
+              "$ref": "#/$defs/neighbor"
+            }
+          }
+        },
+        "controls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cleanText",
+            "boundaries"
+          ],
+          "properties": {
+            "cleanText": {
+              "type": "string"
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/boundary"
+              }
+            }
+          }
+        },
+        "assist": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "pronunciationSummary": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

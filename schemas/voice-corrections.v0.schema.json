@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ziro-lab/ymm4-voice-quality-assist/schemas/voice-corrections.v0.schema.json",
+  "title": "YMM4 Voice Corrections v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "exportSessionId",
+    "corrections"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ymm4.voice-corrections.v0"
+    },
+    "corrections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/correction"
+      }
+    },
+    "exportSessionId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "review": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "human",
+            "local-rule",
+            "llm"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "setReading"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "cleanTextPosition"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "addBoundary",
+                "removeBoundary"
+              ]
+            },
+            "cleanTextPosition": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "anchor"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "helperVowelZero",
+                "helperConsonantZero"
+              ]
+            },
+            "anchor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cleanTextPosition"
+              ],
+              "properties": {
+                "cleanTextPosition": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "gesture"
+          ],
+          "properties": {
+            "type": {
+              "const": "setProsodyGesture"
+            },
+            "gesture": {
+              "enum": [
+                "none",
+                "smooth",
+                "light-rise",
+                "light-fall",
+                "hold",
+                "sigh-like",
+                "surprise-like"
+              ]
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "noChange"
+            }
+          }
+        }
+      ]
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "expectedSourceFingerprint",
+        "operations"
+      ],
+      "properties": {
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exportRef",
+            "exportIndex"
+          ],
+          "properties": {
+            "exportIndex": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "exportRef": {
+              "type": "string",
+              "pattern": "^voice-[0-9]{6}$"
+            }
+          }
+        },
+        "expectedSourceFingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/operation"
+          }
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      }
+    }
+  }
+}
