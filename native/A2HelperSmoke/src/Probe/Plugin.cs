@@ -344,8 +344,8 @@ internal static class Probe
 
         // The same saved contexts are now repeated at multiple positions.
         // Product must fail closed and restore ordinary YMM4 audio.
-        voice.Serif = "ええええ";
-        voice.Hatsuon = "エエエエ";
+        voice.Serif = "あえええええ";
+        voice.Hatsuon = "アエエエエエ";
 
         await WaitUntil(
             "ambiguous helper anchor restores baseline",
