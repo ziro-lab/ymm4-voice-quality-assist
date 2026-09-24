@@ -299,7 +299,7 @@ VoiceItem.Pronounce = regenerated Pronounce
 
 このLabではfake VOICEVOX provider自体のproject persistenceは検証対象から分離しています。実製品でのvoice provider永続化はYMM4/各provider側の責務であり、Voice Quality Assistが永続化するsource of truthはCorrection marker / Effect設定です。
 
-残るController課題は「reloadやitem rebindingをどのpublic lifecycle signalで検知してこのreapplyを起動するか」であり、Correctionの再解決・合成可能性そのものは閉じています。
+A1製品MVPでは、assembly load時にModuleInitializerからruntimeを起動し、active timelineの差し替えとitem rebindingを監視してreapplyを開始します。project save/reloadの補正source永続性と再合成可能性はLab #131/#132で閉じ、製品native smokeではsource変更・Effect lifecycle・Hatsuon不一致からの再解決を確認済みです。
 
 ## 5.4 Proven Undo / Redo apply unit
 
@@ -330,9 +330,11 @@ snapshot復元後は`VoiceItem.ClearVoiceCache()`を呼び、Pronounceと実音�
 
 実ホストではpublic `UndoAsync()/RedoAsync()`だけでなく、YMM4の標準`CommandSettings.Default[CommandType.Undo/Redo]`からも同じ履歴が実行され、pause値とWAV SHA256がbaseline/corrected間で完全に往復しました。
 
-PR #133でcurrent `UndoRedoManager` の製品向け取得経路も閉じました。real `ITimelineToolViewModel.SetTimelineToolInfo(TimelineToolInfo)` へYMM4自身が渡す `TimelineToolInfo.UndoRedoManager` はnon-nullで、`AddCommand` / `Record` / `UndoAsync` / `RedoAsync` までpublicです。
+PR #133でcurrent `UndoRedoManager` の取得経路自体は閉じています。real `ITimelineToolViewModel.SetTimelineToolInfo(TimelineToolInfo)` へYMM4自身が渡す `TimelineToolInfo.UndoRedoManager` はnon-nullで、`AddCommand` / `Record` / `UndoAsync` / `RedoAsync` までpublicです。
 
-したがって製品のtimeline-tool/controller境界では、MainViewModel/private field reflectionを使わず、host-supplied `TimelineToolInfo.UndoRedoManager` を保持してPR #130のUndo/Redo apply unitへ渡します。
+ただしA1製品MVPでは、補正済みPronounce/WAVを**独立したユーザー編集履歴としてRecordしません**。A1のsource of truthはSerif / `<w0>` / Hatsuon / Assist Effectであり、生成済み音声はderived runtime stateです。source側がUndo/Redo・編集・reloadで変化した場合、Controllerがderived stateを再生成します。
+
+PR #130/#133のUndo apply-unitは、将来の明示的なCorrection Importや「補正適用を1操作として履歴へ載せる」機能で利用可能なPROVEN optionとして保持します。
 
 ## 5.5 Proven Assist Effect lifecycle
 
@@ -362,7 +364,7 @@ same corrected WAV
 
 検証ではcorrected WAVとbaseline WAVを異なる内容にし、SHA256でenabled → corrected、disabled → baseline、re-enabled → same corrected、removed → same baselineの完全な往復を確認しました。`Effect.IsEnabled`変更通知と`VoiceItem.JimakuVideoEffects`変更通知も同じ実ホスト経路で観測されています。
 
-製品Controllerはこの状態遷移をdebounce/coalesceして実行すればよく、Effect無効化・削除時に補正済み音声を残し続ける設計にはしません。
+製品Controllerは250msのcoalescing scanとper-item通知でこの状態遷移を実行し、Effect無効化・削除時に補正済み音声を残し続けません。Product PR #2のnative smokeでdisable/re-enable、marker remove/restore、Hatsuon mismatch/recoveryまで確認済みです。
 
 ## 5.6 Proven audio/cache refresh boundary
 
@@ -388,6 +390,49 @@ VoiceItemでは`VoiceCache` / `Pronounce`のPropertyChanged、Timelineではpubl
 Plugin-facing surfaceのrefresh/redraw名走査で得られたのは `Timeline.RefreshTimelineLengthAndMaxLayer()` で、これはpreview/audio redraw用APIではありません。製品側は専用の非公開redraw hookを追加せず、上記のsupported state pathを使います。
 
 GitHub-hosted CIは物理スピーカーからの知覚音声を証明しないため、補正直後の実機プレビュー聴取はhands-on acceptanceとして扱えますが、host integration routeのブロッカーにはしません。
+
+## 5.7 Product runtime activation — A1 native proven
+
+A1製品MVPは、Voice Quality Assist Toolを開くことを動作条件にしません。
+
+```text
+plugin assembly load
+   ↓
+CLR ModuleInitializer
+   ↓
+Application.Current.Dispatcherへhandoff
+   ↓
+YMM4 MainViewModelをwindow DataContextから発見
+   ↓
+public ActiveTimelineViewModel getter
+   ↓
+public TimelineViewModel.Items
+   ↓
+public TimelineItemViewModel.Item
+   ↓
+VoiceItem observer / reconcile
+```
+
+YMM4 4.56.1.0では`MainViewModel`型そのものがinternalですが、`ActiveTimelineViewModel` getterはpublicです。そのため製品コードのreflection境界は次の1点だけに限定します。
+
+```text
+type full name == YukkuriMovieMaker.ViewModels.MainViewModel
+GetProperty("ActiveTimelineViewModel", BindingFlags.Public)
+```
+
+private fieldは読みません。特に`TimelineViewModel.timeline` private fieldやMainModel private fieldへは降りません。getter取得後はpublic `TimelineViewModel` / `TimelineItemViewModel.Item` / `VoiceItem`だけを使います。Harmonyも使用しません。
+
+startupは`IPlugin.Initialize()`へ依存しません。YMM4 4.56.1.0の`IPlugin`は主にplugin metadata surfaceであり、A1ではCLR標準`ModuleInitializer`を意図的に使用します。assembly loadがWPF Application生成より先の場合は、loader thread上にDispatcherを作らず、短い`System.Threading.Timer`で`Application.Current`を待ってUI Dispatcherへ移します。
+
+native run `35961051326` で、Toolを開かない状態から自動runtimeが実VoiceItemを検出し、zero-pause補正とlifecycle復帰まで完走しました。
+
+互換性fail-safe:
+
+- MainViewModel type名が変わる
+- public ActiveTimelineViewModel getterが消える
+- active timelineを取得できない
+
+のいずれかではControllerをattachせず、project/audioを変更しません。
 
 ## 6. Voice Review Bridge
 
