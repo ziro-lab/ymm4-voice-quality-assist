@@ -97,7 +97,10 @@ try {
       'consonant_voice_added',
       'consonant_helper_applied',
       'consonant_helper_vowel_preserved',
-      'consonant_persisted_source_unchanged'
+      'consonant_persisted_source_unchanged',
+      'combined_voice_added',
+      'combined_a1_a2_applied',
+      'combined_persisted_source_unchanged'
     )
 
     if($r.requirements.Count-ne$required.Count){
