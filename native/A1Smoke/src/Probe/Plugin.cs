@@ -7,8 +7,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using Newtonsoft.Json.Linq;
-using Ymm4VoiceQualityAssist.Core;
-using Ymm4VoiceQualityAssist.Effects;
 using YukkuriMovieMaker.Plugin;
 using YukkuriMovieMaker.Plugin.Effects;
 using YukkuriMovieMaker.Plugin.Voice;
@@ -237,8 +235,9 @@ internal static class Probe
             var baselineLength = new FileInfo(voicePath).Length;
             Check("baseline_wav_shape", baselineLength == 4844);
 
-            var effect = new PronunciationAssistEffect();
-            AppendEffect(voice, effect);
+            var effect = CreateProductAssistEffect();
+            Check("product_effect_type_discovered", effect is not null);
+            AppendEffect(voice, effect!);
 
             await WaitUntil(
                 "initial correction",
@@ -363,29 +362,75 @@ internal static class Probe
         && new FileInfo(path).Length == 5444
         && GetFirstPauseLength(voice) == 0.0;
 
-    static double? GetFirstPauseLength(VoiceItem voice)
+    static IVideoEffect? CreateProductAssistEffect()
     {
-        if (voice.Pronounce is null)
+        const string typeName =
+            "Ymm4VoiceQualityAssist.Effects.PronunciationAssistEffect";
+
+        var type = AppDomain.CurrentDomain
+            .GetAssemblies()
+            .Select(assembly =>
+                assembly.GetType(
+                    typeName,
+                    throwOnError: false))
+            .FirstOrDefault(x => x is not null);
+
+        if (type is null)
             return null;
 
-        if (!VoiceVoxPronounceAdapter.TryProject(
-            voice.Pronounce,
-            out var projection,
-            out _)
-            || projection is null
-            || projection.AccentPhrases.Count == 0)
+        return Activator.CreateInstance(type) as IVideoEffect;
+    }
+
+    static double? GetFirstPauseLength(VoiceItem voice)
+    {
+        var pronounce = voice.Pronounce;
+        if (pronounce is null)
+            return null;
+
+        var audioQuery = pronounce.GetType().GetProperty(
+            "AudioQuery",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(pronounce);
+
+        if (audioQuery is null)
+            return null;
+
+        if (audioQuery.GetType().GetProperty(
+                "AccentPhrases",
+                BindingFlags.Instance | BindingFlags.Public)
+                ?.GetValue(audioQuery)
+            is not IEnumerable phrases)
         {
             return null;
         }
 
-        return projection.AccentPhrases[0]
-            .PauseMora?
-            .VowelLength;
+        var first = phrases.Cast<object>().FirstOrDefault();
+        if (first is null)
+            return null;
+
+        var pause = first.GetType().GetProperty(
+            "PauseMora",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(first);
+
+        if (pause is null)
+            return null;
+
+        var value = pause.GetType().GetProperty(
+            "VowelLength",
+            BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(pause);
+
+        return value is null
+            ? null
+            : Convert.ToDouble(
+                value,
+                CultureInfo.InvariantCulture);
     }
 
     static void AppendEffect(
         VoiceItem voice,
-        PronunciationAssistEffect effect)
+        IVideoEffect effect)
     {
         var property = typeof(VoiceItem).GetProperty(
             nameof(VoiceItem.JimakuVideoEffects),
