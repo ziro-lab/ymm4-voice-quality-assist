@@ -19,7 +19,7 @@ public sealed class ReviewExportCsvTests
                 StringSplitOptions.None)[0];
 
         Assert.Equal(
-            "\"schema\",\"exportSessionId\",\"exportedAt\",\"exportRef\",\"exportIndex\",\"frame\",\"layer\",\"characterName\",\"speakerApi\",\"speakerId\",\"previousSerif\",\"serif\",\"hatsuon\",\"nextSerif\",\"cleanText\",\"boundaries\",\"prosody\",\"helperRules\",\"sourceFingerprint\"",
+            "\"schema\",\"exportSessionId\",\"exportedAt\",\"exportRef\",\"exportIndex\",\"frame\",\"layer\",\"characterName\",\"speakerApi\",\"speakerId\",\"previousSerif\",\"serif\",\"hatsuon\",\"nextSerif\",\"cleanText\",\"boundaries\",\"prosody\",\"helperRules\",\"hasGeneratedPronounce\",\"generatedMoraReading\",\"accentPhraseCount\",\"sourceFingerprint\"",
             firstLine);
 
         Assert.EndsWith(
