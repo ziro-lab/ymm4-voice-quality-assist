@@ -31,9 +31,11 @@ public sealed class VoiceQualityAssistPlugin : IPlugin, IDisposable
 
 internal static class VoiceQualityAssistModule
 {
+#pragma warning disable CA2255 // Intentional plugin assembly bootstrap.
     [ModuleInitializer]
     internal static void Initialize() =>
         VoiceQualityAssistRuntime.Start();
+#pragma warning restore CA2255
 }
 
 internal static class VoiceQualityAssistRuntime
