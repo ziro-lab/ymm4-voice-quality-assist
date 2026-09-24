@@ -362,13 +362,13 @@ public static class ReviewCorrectionValidator
                 {
                     HelperVowelZeroCorrection h =>
                         (
-                            h.CleanTextPosition,
-                            h.Helper),
+                            Position: h.CleanTextPosition,
+                            Helper: h.Helper),
 
                     HelperConsonantZeroCorrection h =>
                         (
-                            h.CleanTextPosition,
-                            h.Helper),
+                            Position: h.CleanTextPosition,
+                            Helper: h.Helper),
 
                     _ => ((int Position, string Helper)?)null,
                 })
@@ -379,15 +379,15 @@ public static class ReviewCorrectionValidator
         foreach (var helper
             in helpers)
         {
-            if (helper.CleanTextPosition < 0
-                || helper.CleanTextPosition
+            if (helper.Position < 0
+                || helper.Position
                     > cleanTextLength)
             {
                 Add(
                     errors,
                     ReviewCorrectionValidationCode
                         .HelperPositionOutOfRange,
-                    $"Helper position {helper.CleanTextPosition} is outside the clean text.");
+                    $"Helper position {helper.Position} is outside the clean text.");
             }
 
             if (string.IsNullOrWhiteSpace(
@@ -399,7 +399,7 @@ public static class ReviewCorrectionValidator
                     errors,
                     ReviewCorrectionValidationCode
                         .EmptyHelper,
-                    $"Helper at {helper.CleanTextPosition} is empty after normalization.");
+                    $"Helper at {helper.Position} is empty after normalization.");
             }
         }
 
