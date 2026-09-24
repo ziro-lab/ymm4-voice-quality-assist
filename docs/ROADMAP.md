@@ -129,23 +129,38 @@ B0 final verification:
 - A2 native regression `35982062596`: GREEN
 - A3 native regression `35982062548`: GREEN
 
-### B1. Export
+### B1. Export — CLOSED / UNIT + REGRESSION GREEN
 
-候補出力:
+- [x] canonical `ymm4.voice-review.v0` JSON package
+- [x] deterministic ordering（Frame → Layer → original input order）
+- [x] 0-based `exportIndex` + `voice-000000` exportRef
+- [x] B0 `sourceFingerprint`をexact再利用
+- [x] same-session `exportRef -> live VoiceItem` map
+- [x] character / speaker API・ID
+- [x] Serif / Hatsuon
+- [x] previous / next Voice Serif context
+- [x] official `<w0>` → cleanText / boundary情報
+- [x] current Assist helper / prosody settings
+- [x] optional generated pronunciation summary
+- [x] JSON serialize / deserialize
+- [x] 人間向けCSV派生view（stable columns / RFC-style quote escaping / CRLF）
+- [x] ToolからJSON / CSV保存導線
+- [x] malformed enabled Assist settingsはwhole-export fail closed
 
-- [x] JSON schema / example Draft
-- [ ] 人間向けCSV/XLSX view
+B1 final verification:
 
-含めたい情報:
+- source `3c58905043f125f38ef5b0e00bd173b99dda9215`
+- normal build/unit run `35985287715`: 79/79 PASS / 0 warnings / 0 errors
+- A1 native regression `35985287788`: GREEN
+- A2 native regression `35985287645`: GREEN
+- A3 native regression `35985287677`: GREEN
 
-- VoiceItem reference
-- character / speaker
-- Serif
-- Hatsuon
-- previous / next voice context
-- current control tags
-- current pronunciation summary
-- current assist settings
+Non-blocking hands-on:
+
+- [ ] 実YMM4でSaveFileDialogからJSON/CSVを保存して開く
+- [ ] CSVをLibreOffice/Excelで見た目確認
+
+XLSXは必須ではなく、CSVでhuman-readable viewを満たす。必要なら後続で追加する。
 
 ### B2. LLM review workflow
 
