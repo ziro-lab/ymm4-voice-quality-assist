@@ -1,6 +1,9 @@
 namespace Ymm4VoiceQualityAssist.Core;
 
-public abstract record ReviewCorrectionOperation;
+public abstract record CorrectionOperation;
+
+public abstract record ReviewCorrectionOperation
+    : CorrectionOperation;
 
 public sealed record SetReadingCorrection(
     string Reading)
