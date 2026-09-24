@@ -241,6 +241,12 @@ internal static class Probe
                 parameter,
                 effectType);
 
+            var combined = await RunCombinedLifecycleAsync(
+                timeline,
+                character,
+                parameter,
+                effectType);
+
             File.WriteAllText(
                 Path.Combine(
                     output,
@@ -251,6 +257,7 @@ internal static class Probe
                         host = "4.56.1.0 Lite",
                         vowel,
                         consonant,
+                        combined,
                     },
                     new JsonSerializerOptions
                     {
@@ -465,6 +472,136 @@ internal static class Probe
                     helper,
                     "VowelLength"),
         };
+    }
+
+    static async Task<object> RunCombinedLifecycleAsync(
+        Timeline timeline,
+        Character character,
+        IVoiceParameter parameter,
+        Type effectType)
+    {
+        const string serif = "え<w0>ええ";
+        const string hatsuon = "エエエ";
+
+        var voice = CreateVoice(
+            character,
+            parameter,
+            serif,
+            hatsuon,
+            "A2_COMBINED");
+
+        Check(
+            "combined_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                600,
+                9));
+
+        await voice.CreateVoiceFileAsync();
+
+        var path = RequireVoicePath(
+            voice,
+            "combined");
+
+        var effect = CreateAssistEffect(
+            effectType,
+            """
+            {"version":1,"rules":[{"kind":"zeroVowel","helper":"ウ","anchor":{"position":2,"left":"ええ","right":"え"}}]}
+            """);
+
+        AppendEffect(voice, effect);
+
+        await WaitUntil(
+            "combined A1 A2 apply",
+            () =>
+                File.Exists(path)
+                && new FileInfo(path).Length == 5444
+                && CombinedCorrectionApplied(voice));
+
+        Check(
+            "combined_a1_a2_applied",
+            CombinedCorrectionApplied(voice));
+
+        Check(
+            "combined_persisted_source_unchanged",
+            voice.Serif == serif
+            && voice.Hatsuon == hatsuon);
+
+        return new
+        {
+            voice.Serif,
+            voice.Hatsuon,
+            fileLength = new FileInfo(path).Length,
+            pauseVowelLength = GetFirstPauseLength(voice),
+            helperVowelLength = GetMoras(voice)
+                .Where(x => GetText(x) == "ウ")
+                .Select(x =>
+                    GetNullableDouble(
+                        x,
+                        "VowelLength"))
+                .SingleOrDefault(),
+        };
+    }
+
+    static bool CombinedCorrectionApplied(
+        VoiceItem voice)
+    {
+        var helper = GetMoras(voice)
+            .Where(x => GetText(x) == "ウ")
+            .ToArray();
+
+        return helper.Length == 1
+            && GetNullableDouble(
+                helper[0],
+                "VowelLength") == 0.0
+            && GetFirstPauseLength(voice) == 0.0;
+    }
+
+    static double? GetFirstPauseLength(
+        VoiceItem voice)
+    {
+        var pronounce = voice.Pronounce;
+        if (pronounce is null)
+            return null;
+
+        var audioQuery = pronounce.GetType()
+            .GetProperty(
+                "AudioQuery",
+                BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(pronounce);
+
+        if (audioQuery is null)
+            return null;
+
+        if (audioQuery.GetType()
+            .GetProperty(
+                "AccentPhrases",
+                BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(audioQuery)
+            is not IEnumerable phrases)
+        {
+            return null;
+        }
+
+        var first = phrases
+            .Cast<object>()
+            .FirstOrDefault();
+
+        if (first is null)
+            return null;
+
+        var pause = first.GetType()
+            .GetProperty(
+                "PauseMora",
+                BindingFlags.Instance | BindingFlags.Public)
+            ?.GetValue(first);
+
+        if (pause is null)
+            return null;
+
+        return GetNullableDouble(
+            pause,
+            "VowelLength");
     }
 
     static VoiceItem CreateVoice(
