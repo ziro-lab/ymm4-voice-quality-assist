@@ -20,11 +20,7 @@ try {
   $ready=Join-Path $OutputDir 'fake-server-ready.txt'
   $deadline=[DateTime]::UtcNow.AddSeconds(20)
 
-  while(
-    [DateTime]::UtcNow-lt$deadline
-    -and -not(Test-Path $ready)
-    -and -not$server.HasExited
-  ){
+  while([DateTime]::UtcNow -lt $deadline -and -not(Test-Path $ready) -and -not $server.HasExited){
     Start-Sleep -Milliseconds 200
   }
 
@@ -49,11 +45,7 @@ try {
     $result=Join-Path $OutputDir 'result.json'
     $limit=[DateTime]::UtcNow.AddSeconds(150)
 
-    while(
-      [DateTime]::UtcNow-lt$limit
-      -and -not$process.HasExited
-      -and -not(Test-Path $result)
-    ){
+    while([DateTime]::UtcNow -lt $limit -and -not $process.HasExited -and -not(Test-Path $result)){
       Start-Sleep -Milliseconds 350
     }
 
