@@ -28,11 +28,13 @@ try {
     throw 'Fake VOICEVOX server did not start'
   }
 
-  $pluginDir=Join-Path $Ymm4Dir 'user/plugin/Ymm4VoiceQualityAssistA1Smoke'
-  New-Item -ItemType Directory -Force $pluginDir|Out-Null
+  $productPluginDir=Join-Path $Ymm4Dir 'user/plugin/Ymm4VoiceQualityAssist'
+  $probePluginDir=Join-Path $Ymm4Dir 'user/plugin/Ymm4VoiceQualityAssistNativeProbe'
+  New-Item -ItemType Directory -Force $productPluginDir|Out-Null
+  New-Item -ItemType Directory -Force $probePluginDir|Out-Null
 
-  Copy-Item (Join-Path $ProductDir 'Ymm4VoiceQualityAssist.dll') $pluginDir
-  Copy-Item (Join-Path $ProbeDir 'Ymm4VoiceQualityAssistNativeProbe.dll') $pluginDir
+  Copy-Item (Join-Path $ProductDir 'Ymm4VoiceQualityAssist.dll') $productPluginDir
+  Copy-Item (Join-Path $ProbeDir 'Ymm4VoiceQualityAssistNativeProbe.dll') $probePluginDir
 
   $env:VQA_A1_NATIVE_OUTPUT=$OutputDir
   $env:VQA_A1_FAKE_VOICEVOX_URL="http://127.0.0.1:$port"
@@ -84,6 +86,7 @@ try {
       'fake_engine_registered',
       'voice_added_to_timeline',
       'baseline_file_exists',
+      'product_effect_type_discovered',
       'baseline_wav_shape',
       'initial_correction_applied',
       'disable_restores_baseline',
