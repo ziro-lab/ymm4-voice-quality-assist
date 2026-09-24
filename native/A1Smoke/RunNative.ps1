@@ -68,13 +68,14 @@ try {
       Get-Content $requests
     }
 
-    if(
-      $r.schema-ne'vqa.a1.product-native-smoke.v1'
-      -or $r.status-ne'PASS_A1_PRODUCT_NATIVE_SMOKE'
-      -or $r.host-ne'4.56.1.0 Lite'
-      -or $r.sourceHead-ne$env:GITHUB_SHA
-      -or $r.error
-    ){
+    $resultRejected = (
+      $r.schema -ne 'vqa.a1.product-native-smoke.v1' -or
+      $r.status -ne 'PASS_A1_PRODUCT_NATIVE_SMOKE' -or
+      $r.host -ne '4.56.1.0 Lite' -or
+      $r.sourceHead -ne $env:GITHUB_SHA -or
+      $null -ne $r.error
+    )
+    if($resultRejected){
       throw 'Native product result rejected'
     }
 
