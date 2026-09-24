@@ -152,6 +152,165 @@ public sealed class ForcedBoundaryVNextTests
         Assert.Equal(0.30, punctuationOnly.PauseMora!.VowelLength);
     }
 
+    [Fact]
+    public async Task Planner_MultipleMarkers_InjectDistinctCommas()
+    {
+        var speaker = FakeSpeaker(new Dictionary<string, string>
+        {
+            ["東京大学院"] = "トウキョウダイガクイン",
+            ["東京"] = "トウキョウ",
+            ["東京大学"] = "トウキョウダイガク",
+        });
+
+        var result = await ForcedBoundaryReadingPlanner.ResolveAsync(
+            speaker,
+            FakeParameter(),
+            new BoundaryMarkerParseResult("東京大学院", [2, 4]),
+            "トウキョウダイガクイン");
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(
+            "トウキョウ、ダイガク、イン",
+            result.Plan!.TransientReading);
+        Assert.Equal(
+            [2, 4],
+            result.Plan.Boundaries
+                .Select(x => x.MarkerPosition)
+                .ToArray());
+        Assert.Equal(
+            2,
+            result.Plan.TransientReading.Count(x => x == '、'));
+    }
+
+    [Fact]
+    public async Task Planner_ExistingCommaAfterInjectedBoundary_IsPreserved()
+    {
+        var speaker = FakeSpeaker(new Dictionary<string, string>
+        {
+            ["テスト、終わり"] = "テスト、オワリ",
+            ["テ"] = "テ",
+        });
+
+        var result = await ForcedBoundaryReadingPlanner.ResolveAsync(
+            speaker,
+            FakeParameter(),
+            new BoundaryMarkerParseResult("テスト、終わり", [1]),
+            "テスト、オワリ");
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(
+            "テ、スト、オワリ",
+            result.Plan!.TransientReading);
+        Assert.Equal(
+            "テスト、オワリ",
+            result.Plan.BaseReading);
+    }
+
+    [Fact]
+    public async Task Planner_DoesNotSplitSurrogatePairBoundary()
+    {
+        var speaker = FakeSpeaker(new Dictionary<string, string>
+        {
+            ["😀あ"] = "😀ア",
+            ["😀"] = "😀",
+        });
+
+        var result = await ForcedBoundaryReadingPlanner.ResolveAsync(
+            speaker,
+            FakeParameter(),
+            new BoundaryMarkerParseResult("😀あ", [2]),
+            "😀ア");
+
+        Assert.True(result.IsSuccess, result.Message);
+        var boundary = Assert.Single(result.Plan!.Boundaries);
+        Assert.Equal(2, boundary.HatsuonBoundary);
+        Assert.Equal("😀、ア", result.Plan.TransientReading);
+    }
+
+    [Fact]
+    public async Task Planner_HelperAtSameReadingBoundary_FailsClosed()
+    {
+        var speaker = FakeSpeaker(new Dictionary<string, string>
+        {
+            ["東京大学"] = "トウキョウダイガク",
+            ["東京"] = "トウキョウ",
+        });
+
+        var rule = new HelperMoraRule(
+            HelperMoraKind.ZeroVowel,
+            "ウ",
+            new HelperAnchor(2, "東京", "大学"));
+
+        var helperPlan = new HelperReadingPlan(
+            "東京大学",
+            "トウキョウダイガク",
+            "トウキョウウダイガク",
+            [
+                new ResolvedHelperInsertion(
+                    0,
+                    rule,
+                    2,
+                    5,
+                    "トウキョウ",
+                    "トウキョウウ"),
+            ]);
+
+        var result = await ForcedBoundaryReadingPlanner.ResolveAsync(
+            speaker,
+            FakeParameter(),
+            new BoundaryMarkerParseResult("東京大学", [2]),
+            "トウキョウダイガク",
+            helperPlan);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            BoundaryResolutionStatus.HelperBoundaryConflict,
+            result.Status);
+    }
+
+    [Fact]
+    public void ForcedBoundaryAndProsody_CoexistOnSameProjection()
+    {
+        var first = Phrase(0, 0.25, "ア", "イ");
+        var tail = Phrase(1, null, "ウ");
+        first.Moras[0].Pitch = 5.0;
+        first.Moras[1].Pitch = 5.2;
+        tail.Moras[0].Pitch = 5.0;
+
+        var projection = Projection(first, tail);
+        var plan = new ForcedBoundaryAnalysisPlan(
+            "あいう",
+            "アイウ",
+            "アイウ",
+            "アイ、ウ",
+            [
+                new ResolvedForcedBoundaryInsertion(
+                    2,
+                    2,
+                    2,
+                    "アイ"),
+            ]);
+
+        var resolution = InjectedPauseResolver.Resolve(
+            plan,
+            projection);
+        Assert.True(resolution.IsSuccess, resolution.Message);
+
+        var boundaryMutation = ForcedBoundaryMutator.Apply(
+            projection,
+            resolution);
+        Assert.True(boundaryMutation.Applied, boundaryMutation.Error);
+
+        var prosody = ProsodyMoraMutator.Apply(
+            projection,
+            ProsodyGesture.Hold);
+
+        Assert.True(prosody.IsSuccess, prosody.Message);
+        Assert.Equal(0.0, first.PauseMora!.VowelLength);
+        Assert.Equal(3, prosody.MutatedMoraCount);
+        Assert.NotEqual(5.2, first.Moras[1].Pitch);
+    }
+
     static VOICEVOXAccentPhrase Phrase(
         int index,
         double? pause,
