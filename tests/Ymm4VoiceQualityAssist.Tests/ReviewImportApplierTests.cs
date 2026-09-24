@@ -139,6 +139,13 @@ public sealed class ReviewImportApplierTests
                 ReviewAssistEffectCollection
                     .Enumerate(voice));
 
+        Assert.IsType<PronunciationAssistAudioEffect>(
+            effect);
+
+        Assert.Empty(
+            PronunciationAssistSettingsStore
+                .EnumerateLegacy(voice));
+
         Assert.True(
             effect.IsEnabled);
 
