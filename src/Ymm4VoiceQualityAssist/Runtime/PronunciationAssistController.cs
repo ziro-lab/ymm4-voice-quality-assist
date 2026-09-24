@@ -56,14 +56,16 @@ public sealed class PronunciationAssistController : IDisposable
             ?? Dispatcher.CurrentDispatcher;
 
         rescanTimer = new DispatcherTimer(
-            TimeSpan.FromMilliseconds(250),
             DispatcherPriority.Background,
-            (_, _) =>
-            {
-                rescanTimer.Stop();
-                _ = ReconcileAllAsync();
-            },
-            dispatcher);
+            dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(250),
+        };
+        rescanTimer.Tick += (_, _) =>
+        {
+            rescanTimer.Stop();
+            _ = ReconcileAllAsync();
+        };
 
         undoRedoManager.Recorded += OnHistoryChanged;
         undoRedoManager.Undoed += OnHistoryChanged;
@@ -119,9 +121,12 @@ public sealed class PronunciationAssistController : IDisposable
 
     void RefreshItemSubscriptions()
     {
+        IEqualityComparer<VoiceItem> comparer =
+            ReferenceEqualityComparer.Instance;
+
         var current = timeline.Items
             .OfType<VoiceItem>()
-            .ToHashSet(ReferenceEqualityComparer.Instance);
+            .ToHashSet(comparer);
 
         foreach (var stale in states.Keys
             .Where(x => !current.Contains(x))
@@ -347,9 +352,12 @@ public sealed class PronunciationAssistController : IDisposable
 
         public void RefreshEffectSubscriptions()
         {
+            IEqualityComparer<INotifyPropertyChanged> comparer =
+                ReferenceEqualityComparer.Instance;
+
             var current = EnumerateEffects(voice)
                 .OfType<INotifyPropertyChanged>()
-                .ToHashSet(ReferenceEqualityComparer.Instance);
+                .ToHashSet(comparer);
 
             foreach (var old in effectSubscriptions
                 .Where(x => !current.Contains(x))
