@@ -74,6 +74,31 @@ Lab PR #136で、Serif-only `<w0>`はYMM4/VOICEVOXの生成経路を自動的に
 
 対応不能・不一致・複数候補はfail closedとし、自動変更しません。
 
+Lab PR #137で、この写像のpublic mechanismを確認しました。
+
+```text
+clean Serif + <w0> position
+   │
+   ├─ full clean Serif
+   │    └─ same speaker ConvertKanjiToYomiAsync(full)
+   │
+   └─ marker直前prefix
+        └─ same speaker ConvertKanjiToYomiAsync(prefix)
+                 │
+                 ▼
+        normalized prefix reading
+                 │
+                 ▼
+AudioQuery AccentPhrases
+  └─ cumulative Mora.Text phrase-end とexact比較
+                 │
+      unique + PauseMora exists
+                 ▼
+        target PauseMora
+```
+
+製品側はfull/current reading整合も確認し、manual Hatsuon等で一致しない場合は自動適用しません。
+
 ## 4. Local correction pipeline
 
 ```text
