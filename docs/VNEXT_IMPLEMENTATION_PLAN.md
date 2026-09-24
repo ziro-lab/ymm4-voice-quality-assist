@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **READY FOR IMPLEMENTATION AFTER LAB GATES**
+Status: **PHASE 0–1 GREEN / PHASE 2 IN IMPLEMENTATION**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -10,6 +10,19 @@ Requirements:
 - `docs/VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md`
 
 ## Phase 0 — Lab gates
+
+Status: **GREEN**
+
+Accepted Lab evidence is frozen in `ziro-lab/chat-native-work-lab-001` PR #142.
+
+- L0.1 forced-boundary transient comma:
+  - source `592115e48f67a0f52fb829fc70ff4e26d411a4e5`
+  - run `36013239960`
+  - all 14 required assertions PASS
+- L0.2 Audio Effect host surface:
+  - source `ea0ecae8925c40adcd7bb28c4cac7559468da4ef`
+  - run `36021832446`
+  - all 14 required assertions PASS
 
 Do these before changing durable Effect storage.
 
@@ -62,6 +75,16 @@ Decision:
 Do not delay forced-boundary semantics on this UI-placement decision.
 
 ## Phase 1 — Forced boundary core
+
+Status: **GREEN**
+
+Accepted product source: `ac9d530f00a59efc67ee396b04d4d29d962a3bf1` (PR #12).
+
+- unit: 157/157 PASS
+- A1 vNext native: GREEN
+- A2 helper native: GREEN
+- A3 prosody native: GREEN
+- B3 import native: GREEN
 
 Replace the old A1 resolver semantics.
 
@@ -124,6 +147,18 @@ Native:
 - Undo/Redo.
 
 ## Phase 2 — Effect storage adapter
+
+Status: **IN IMPLEMENTATION / L0.2 GREEN**
+
+Current implementation branch: `feature/vnext-audio-effect-storage` / PR #13.
+
+The accepted storage policy is:
+
+- canonical/new-write: `VoiceItem.AudioEffects`;
+- compatibility read: legacy `JimakuVideoEffects`;
+- runtime/core collection identity is isolated behind `PronunciationAssistSettingsStore`;
+- legacy migration is explicit, user-triggered and Undo/Redo-able;
+- mixed legacy+audio state is not auto-merged; migration fails closed for manual review.
 
 Only after L0.2 decision.
 
