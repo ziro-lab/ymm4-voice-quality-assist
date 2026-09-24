@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Vortice.Direct2D1;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Exo;
@@ -9,7 +10,17 @@ namespace Ymm4VoiceQualityAssist.Effects;
 [VideoEffect("発音補助", ["音声", "発音補助"], [])]
 public sealed class PronunciationAssistEffect : VideoEffectBase
 {
+    string helperRulesJson = string.Empty;
+
     public override string Label => "発音補助";
+
+    [Browsable(false)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string HelperRulesJson
+    {
+        get => helperRulesJson;
+        set => Set(ref helperRulesJson, value ?? string.Empty);
+    }
 
     public override IEnumerable<string> CreateExoVideoFilters(
         int keyFrameIndex,
