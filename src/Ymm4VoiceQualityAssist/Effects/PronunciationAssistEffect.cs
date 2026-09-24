@@ -11,6 +11,18 @@ public sealed class PronunciationAssistEffect : VideoEffectBase
 {
     public override string Label => "発音補助";
 
+    /// <summary>
+    /// Versioned canonical helper-mora rule JSON.
+    ///
+    /// Empty string means no helper rules. Generated augmented reading /
+    /// Pronounce / WAV remain derived runtime state and are never persisted here.
+    /// </summary>
+    public string HelperRulesJson
+    {
+        get;
+        set => Set(ref field, value);
+    } = string.Empty;
+
     public override IEnumerable<string> CreateExoVideoFilters(
         int keyFrameIndex,
         ExoOutputDescription exoOutputDescription) => [];
