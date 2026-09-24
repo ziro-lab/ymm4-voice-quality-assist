@@ -96,7 +96,14 @@ try {
       'disable_restores_baseline',
       'reenable_reapplies_hold',
       'persisted_source_unchanged',
-      'prosody_setting_stays_hold'
+      'prosody_setting_stays_hold',
+      'reload_voice_added',
+      'reload_initial_hold_applied',
+      'reload_project_a_saved',
+      'reload_source_survives',
+      'reload_prosody_exact',
+      'reload_fixture_speaker_rebound',
+      'reload_hold_reapplied'
     )
 
     if($r.requirements.Count-ne$required.Count){
