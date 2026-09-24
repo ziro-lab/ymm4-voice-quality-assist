@@ -23,6 +23,8 @@ public enum AssistApplyStatus
     ResolutionFailed,
     MutationFailed,
     SynthesisFailed,
+    Superseded,
+    UnsupportedProvider,
 }
 
 public sealed record AssistApplyResult(
@@ -48,13 +50,13 @@ public sealed class ZeroPauseApplyService
 
     public bool HasHelperConfiguration(VoiceItem voice) =>
         EnumerateAssistEffects(voice)
-            .Any(effect =>
-                !string.IsNullOrWhiteSpace(effect.HelperRulesJson));
+            .Any(effect => effect.IsEnabled
+                && !string.IsNullOrWhiteSpace(effect.HelperRulesJson));
 
     public bool HasProsodyConfiguration(VoiceItem voice) =>
         EnumerateAssistEffects(voice)
-            .Any(effect =>
-                effect.Prosody != ProsodyGesture.None);
+            .Any(effect => effect.IsEnabled
+                && effect.Prosody != ProsodyGesture.None);
 
     public bool TryGetHelperRuleSet(
         VoiceItem voice,
@@ -97,6 +99,13 @@ public sealed class ZeroPauseApplyService
             .Distinct()
             .ToArray();
 
+        if (configured.Any(x => !Enum.IsDefined(x)))
+        {
+            gesture = ProsodyGesture.None;
+            error = "この候補版では未対応の抑揚設定です。";
+            return false;
+        }
+
         if (configured.Length > 1)
         {
             gesture = ProsodyGesture.None;
@@ -112,9 +121,11 @@ public sealed class ZeroPauseApplyService
         return true;
     }
 
-    public async Task<AssistApplyResult> ApplyAsync(VoiceItem voice)
+    public async Task<AssistApplyResult> ApplyAsync(VoiceItem voice, Func<bool>? isCurrentTarget = null)
     {
         ArgumentNullException.ThrowIfNull(voice);
+        using var lease = new VoiceApplyLease(voice, isCurrentTarget);
+        if (!lease.IsCurrent) return Superseded();
 
         var markerSource = ParseMarkers(voice);
 
@@ -179,6 +190,7 @@ public sealed class ZeroPauseApplyService
         }
 
         var targetPath = await EnsureVoicePathAsync(voice);
+        if (!lease.IsCurrent) return Superseded();
         if (string.IsNullOrWhiteSpace(targetPath))
         {
             return new AssistApplyResult(
@@ -187,6 +199,9 @@ public sealed class ZeroPauseApplyService
                 null,
                 "VoiceItem.FilePath is unavailable.");
         }
+
+        lease.PinOutput(targetPath);
+        AssistRuntimeStatus.Current.NoteGeneration();
 
         HelperReadingPlan? helperPlan = null;
         var synthesisText = hatsuon;
@@ -200,6 +215,8 @@ public sealed class ZeroPauseApplyService
                     markerSource.CleanText,
                     hatsuon,
                     helperRules.Rules);
+
+            if (!lease.IsCurrent) return Superseded();
 
             if (!helperPlanResult.IsSuccess
                 || helperPlanResult.Plan is null)
@@ -236,6 +253,8 @@ public sealed class ZeroPauseApplyService
                     "Fresh analysis/synthesis failed.",
                     ex);
             }
+
+            if (!lease.IsCurrent) return Superseded();
 
             if (freshPronounce is null)
             {
@@ -299,6 +318,8 @@ public sealed class ZeroPauseApplyService
                         markerSource,
                         helperPlan,
                         freshPronounce);
+
+                if (!lease.IsCurrent) return Superseded();
 
                 if (!resolution.IsSuccess)
                 {
@@ -371,10 +392,8 @@ public sealed class ZeroPauseApplyService
                     "Corrected synthesis did not produce a usable WAV.");
             }
 
-            File.Copy(
-                correctedPath,
-                targetPath,
-                overwrite: true);
+            if (!AtomicWaveFile.TryReplace(correctedPath, targetPath, () => lease.IsCurrent))
+                return Superseded();
             voice.ClearVoiceCache();
             voice.Pronounce = regenerated!;
 
@@ -391,9 +410,11 @@ public sealed class ZeroPauseApplyService
         }
     }
 
-    public async Task<AssistApplyResult> RestoreBaselineAsync(VoiceItem voice)
+    public async Task<AssistApplyResult> RestoreBaselineAsync(VoiceItem voice, Func<bool>? isCurrentTarget = null)
     {
         ArgumentNullException.ThrowIfNull(voice);
+        using var lease = new VoiceApplyLease(voice, isCurrentTarget);
+        if (!lease.IsCurrent) return Superseded();
 
         if (!TryResolveVoiceContext(
             voice,
@@ -415,6 +436,7 @@ public sealed class ZeroPauseApplyService
         }
 
         var targetPath = await EnsureVoicePathAsync(voice);
+        if (!lease.IsCurrent) return Superseded();
         if (string.IsNullOrWhiteSpace(targetPath))
         {
             return new AssistApplyResult(
@@ -424,6 +446,8 @@ public sealed class ZeroPauseApplyService
                 "VoiceItem.FilePath is unavailable.");
         }
 
+        lease.PinOutput(targetPath);
+        AssistRuntimeStatus.Current.NoteGeneration();
         var baselinePath = CreateTempWavePath();
 
         try
@@ -453,7 +477,8 @@ public sealed class ZeroPauseApplyService
                     "Baseline synthesis did not produce a usable WAV.");
             }
 
-            File.Copy(baselinePath, targetPath, overwrite: true);
+            if (!AtomicWaveFile.TryReplace(baselinePath, targetPath, () => lease.IsCurrent))
+                return Superseded();
             voice.ClearVoiceCache();
             voice.Pronounce = baseline!;
 
@@ -486,6 +511,14 @@ public sealed class ZeroPauseApplyService
                 0,
                 null,
                 "The VoiceItem has no active voice speaker.");
+            return false;
+        }
+
+        if (!string.Equals(speaker.GetType().FullName,
+            "YukkuriMovieMaker.Voice.VOICEVOXVoiceSpeaker", StringComparison.Ordinal))
+        {
+            error = new AssistApplyResult(AssistApplyStatus.UnsupportedProvider, 0, null,
+                "この候補版の発音補助はYMM4標準のVOICEVOX話者が対象です。元の音声は変更しません。");
             return false;
         }
 
@@ -532,6 +565,13 @@ public sealed class ZeroPauseApplyService
             if (value is PronunciationAssistEffect effect)
                 yield return effect;
         }
+    }
+
+    static AssistApplyResult Superseded()
+    {
+        AssistRuntimeStatus.Current.NoteDiscarded();
+        return new(AssistApplyStatus.Superseded, 0, null,
+            "補正中に対象が変更されたため、古い生成結果を破棄しました。");
     }
 
     static string CreateTempWavePath() =>

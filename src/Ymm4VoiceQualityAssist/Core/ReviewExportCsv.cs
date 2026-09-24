@@ -182,11 +182,12 @@ public static class ReviewExportCsv
         builder.Append("\r\n");
     }
 
-    static string Escape(
-        string value) =>
-        "\"" + value.Replace(
-            "\"",
-            "\"\"",
-            StringComparison.Ordinal)
-        + "\"";
+    static string Escape(string value)
+    {
+        // Quoting alone does not stop spreadsheet applications evaluating formulas.
+        var significant = value.AsSpan().TrimStart();
+        if (significant.Length > 0 && significant[0] is '=' or '+' or '-' or '@')
+            value = "'" + value;
+        return "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+    }
 }

@@ -38,6 +38,7 @@ public sealed class PronunciationAssistController : IDisposable
 
     bool disposed;
     bool scanRunning;
+    bool rescanPending;
 
     public PronunciationAssistController(
         TimelineViewModel timelineViewModel,
@@ -91,16 +92,19 @@ public sealed class PronunciationAssistController : IDisposable
             return;
         }
 
+        rescanPending = true;
+        if (scanRunning) return;
         rescanTimer.Stop();
         rescanTimer.Start();
     }
 
     async Task ReconcileAllAsync()
     {
-        if (disposed || scanRunning)
-            return;
+        if (disposed) return;
+        if (scanRunning) { rescanPending = true; return; }
 
         scanRunning = true;
+        rescanPending = false;
         try
         {
             RefreshItemSubscriptions();
@@ -110,12 +114,27 @@ public sealed class PronunciationAssistController : IDisposable
                 if (disposed)
                     return;
 
-                await ReconcileOneAsync(pair.Key, pair.Value);
+                try
+                {
+                    await ReconcileOneAsync(pair.Key, pair.Value);
+                }
+                catch (Exception ex)
+                {
+                    AssistRuntimeStatus.Current.Report("APPLY_FAILED",
+                        "発音補助を適用できませんでした。対象の設定・エンジン接続を確認してください: "
+                        + ex.GetBaseException().Message);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            AssistRuntimeStatus.Current.Report("HOST_SURFACE_FAILED",
+                "YMM4の監視情報を取得できません。発音補助を保留します: " + ex.GetBaseException().Message);
         }
         finally
         {
             scanRunning = false;
+            if (rescanPending && !disposed) QueueScan();
         }
     }
 
@@ -158,14 +177,19 @@ public sealed class PronunciationAssistController : IDisposable
         ItemState state,
         string? propertyName)
     {
-        if (disposed || state.IsReconciling)
-            return;
+        if (disposed) return;
+
+        if (state.IsReconciling
+            && propertyName is "Pronounce" or "VoiceCache" or "FilePath") return;
 
         if (string.IsNullOrEmpty(propertyName)
             || RelevantVoiceProperties.Contains(
                 propertyName,
                 StringComparer.Ordinal))
         {
+            state.SourceRevision++;
+            if (propertyName == nameof(VoiceItem.VoiceParameter))
+                state.RefreshParameterSubscription();
             if (propertyName == nameof(VoiceItem.JimakuVideoEffects))
                 state.RefreshEffectSubscriptions();
 
@@ -178,14 +202,14 @@ public sealed class PronunciationAssistController : IDisposable
         ItemState state,
         string? propertyName)
     {
-        if (disposed || state.IsReconciling)
-            return;
+        if (disposed) return;
 
         if (string.IsNullOrEmpty(propertyName)
             || propertyName == nameof(PronunciationAssistEffect.IsEnabled)
             || propertyName == nameof(PronunciationAssistEffect.HelperRulesJson)
             || propertyName == nameof(PronunciationAssistEffect.Prosody))
         {
+            state.SourceRevision++;
             QueueScan();
         }
     }
@@ -207,7 +231,7 @@ public sealed class PronunciationAssistController : IDisposable
 
         if (!hasEffect)
         {
-            if (state.HadAssistEffect || state.WasCorrected)
+            if (state.WasCorrected)
                 await RestoreBaselineAsync(voice, state);
 
             state.HadAssistEffect = false;
@@ -222,12 +246,17 @@ public sealed class PronunciationAssistController : IDisposable
             // Presence + disabled, or enabled with no durable marker, means
             // ordinary YMM4 audio. This also clears stale corrected audio
             // after marker removal.
-            await RestoreBaselineAsync(voice, state);
+            if (state.WasCorrected) await RestoreBaselineAsync(voice, state);
             state.LastSourceKey = BuildSourceKey(voice);
             return;
         }
 
-        var sourceKey = BuildSourceKey(voice);
+        var revision = state.SourceRevision;
+        var sourceKey = BuildSourceKey(voice) + ":revision=" + revision;
+        if (state.LastAttemptedKey == sourceKey
+            && ReferenceEquals(voice.Pronounce, state.LastAttemptedPronounce)) return;
+        bool IsCurrentTarget() => !disposed && revision == state.SourceRevision
+            && timelineViewModel.Items.Any(x => ReferenceEquals(x.Item, voice));
         if (state.WasCorrected
             && string.Equals(
                 state.LastSourceKey,
@@ -243,7 +272,12 @@ public sealed class PronunciationAssistController : IDisposable
         state.IsReconciling = true;
         try
         {
-            var result = await service.ApplyAsync(voice);
+            var result = await service.ApplyAsync(voice, IsCurrentTarget);
+            if (result.Status == AssistApplyStatus.Superseded)
+            {
+                QueueScan();
+                return;
+            }
 
             if (result.IsApplied)
             {
@@ -251,19 +285,30 @@ public sealed class PronunciationAssistController : IDisposable
                 state.LastSourceKey = sourceKey;
                 state.LastAppliedPronounce = voice.Pronounce;
                 state.LastResult = result;
+                state.LastAttemptedKey = sourceKey;
+                state.LastAttemptedPronounce = voice.Pronounce;
+                AssistRuntimeStatus.Current.Report("READY", "発音補助を適用しました。変更を監視しています。");
                 return;
             }
 
             // Fail closed. If the marker can no longer be resolved exactly
             // (manual Hatsuon edit, provider change, ambiguous phrase, etc.),
             // do not leave a previously corrected WAV behind.
-            var baseline = await service.RestoreBaselineAsync(voice);
-            state.WasCorrected = false;
+            // Do not overwrite ordinary/manual audio after a first failed correction.
+            // Only an item we previously corrected needs baseline restoration.
+            if (state.WasCorrected)
+            {
+                var baseline = await service.RestoreBaselineAsync(voice, IsCurrentTarget);
+                if (baseline.Status == AssistApplyStatus.Superseded) { QueueScan(); return; }
+                if (baseline.IsBaseline) state.WasCorrected = false;
+            }
             state.LastSourceKey = sourceKey;
             state.LastAppliedPronounce = voice.Pronounce;
-            state.LastResult = result.Status == AssistApplyStatus.NoMarkers
-                ? baseline
-                : result;
+            state.LastAttemptedKey = sourceKey;
+            state.LastAttemptedPronounce = voice.Pronounce;
+            state.LastResult = result;
+            AssistRuntimeStatus.Current.Report(result.Status.ToString(),
+                "発音補助を保留しました: " + result.Message);
         }
         finally
         {
@@ -278,7 +323,11 @@ public sealed class PronunciationAssistController : IDisposable
         state.IsReconciling = true;
         try
         {
-            var result = await service.RestoreBaselineAsync(voice);
+            var revision = state.SourceRevision;
+            var result = await service.RestoreBaselineAsync(voice, () => !disposed
+                && revision == state.SourceRevision
+                && timelineViewModel.Items.Any(x => ReferenceEquals(x.Item, voice)));
+            if (result.Status == AssistApplyStatus.Superseded) { QueueScan(); return; }
             if (result.IsBaseline)
             {
                 state.WasCorrected = false;
@@ -297,13 +346,13 @@ public sealed class PronunciationAssistController : IDisposable
         var speaker = voice.Character?.Voice?.Speaker;
 
         var helperConfiguration = string.Join(
-            "",
+            "\u001e",
             EnumerateAssistEffects(voice)
                 .Select(x =>
                     $"{x.IsEnabled}:{x.HelperRulesJson}:{x.Prosody}"));
 
         return string.Join(
-            "",
+            "\u001f",
             voice.Serif ?? string.Empty,
             voice.Hatsuon ?? string.Empty,
             speaker?.API ?? string.Empty,
@@ -369,6 +418,9 @@ public sealed class PronunciationAssistController : IDisposable
                 notify.PropertyChanged += OnVoicePropertyChanged;
         }
 
+        public long SourceRevision { get; set; }
+        public string? LastAttemptedKey { get; set; }
+        public object? LastAttemptedPronounce { get; set; }
         public bool IsReconciling { get; set; }
         public bool HadAssistEffect { get; set; }
         public bool WasCorrected { get; set; }
@@ -429,8 +481,7 @@ public sealed class PronunciationAssistController : IDisposable
             object? sender,
             PropertyChangedEventArgs e)
         {
-            if (!IsReconciling)
-                voiceChanged(voice, this, nameof(VoiceItem.VoiceParameter));
+            voiceChanged(voice, this, nameof(VoiceItem.VoiceParameter));
         }
 
         static IEnumerable<object> EnumerateEffects(VoiceItem voice)

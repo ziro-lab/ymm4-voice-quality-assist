@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Ymm4VoiceQualityAssist.Core;
 
@@ -60,6 +61,8 @@ public static class ReviewCorrectionJson
     static readonly JsonSerializerOptions Options =
         new()
         {
+            MaxDepth = 32,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
             PropertyNamingPolicy =
                 JsonNamingPolicy.CamelCase,
             WriteIndented = true,
@@ -84,6 +87,9 @@ public static class ReviewCorrectionJson
     {
         ArgumentNullException.ThrowIfNull(
             json);
+
+        if (json.Length > 8 * 1024 * 1024)
+            return Failure(ReviewCorrectionWireErrorCode.InvalidJson, "Correction JSON exceeds the 8 MiB character limit.");
 
         ReviewCorrectionWirePackage? package;
 
