@@ -274,4 +274,79 @@ public sealed class PronunciationAssistSettingsStoreTests
                 .CanonicalSettingsAlreadyPresent,
             prepared.Status);
     }
+    [Fact]
+    public void Migration_PreservesSemanticSourceFingerprint()
+    {
+        var voice =
+            new VoiceItem
+            {
+                CharacterName = "小夜",
+                Serif = "ABC",
+                Hatsuon = "エービーシー",
+            };
+
+        var rules =
+            HelperRuleCodec.Encode(
+                new HelperRuleSet(
+                    HelperRuleSet.CurrentVersion,
+                    [
+                        HelperRuleFactory.Create(
+                            "ABC",
+                            1,
+                            "ウ",
+                            HelperMoraKind.ZeroVowel,
+                            contextLength: 1),
+                    ]));
+
+        var legacy =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = true,
+                HelperRulesJson = rules,
+                Prosody = ProsodyGesture.Hold,
+            };
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                voice,
+                legacy,
+                out var addError),
+            addError);
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var before,
+                out var beforeError),
+            beforeError);
+
+        var prepared =
+            PronunciationAssistSettingsMigration
+                .Prepare(voice);
+
+        Assert.True(
+            prepared.IsReady,
+            prepared.Message);
+
+        Assert.True(
+            prepared.Journal!
+                .Commit()
+                .IsSuccess);
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var after,
+                out var afterError),
+            afterError);
+
+        Assert.Equal(
+            before!.Fingerprint,
+            after!.Fingerprint);
+
+        Assert.Equal(
+            before.CanonicalJson,
+            after.CanonicalJson);
+    }
+
 }
