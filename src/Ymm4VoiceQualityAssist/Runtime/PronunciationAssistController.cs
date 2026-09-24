@@ -292,7 +292,7 @@ public sealed class PronunciationAssistController : IDisposable
             speaker?.API ?? string.Empty,
             speaker?.ID ?? string.Empty,
             RuntimeHelpers.GetHashCode(
-                voice.VoiceParameter ?? (object)voice));
+                (object?)voice.VoiceParameter ?? voice));
     }
 
     public void Dispose()
