@@ -447,7 +447,12 @@ public static class ReviewImportApplier
         var existingHelperPositions =
             new HashSet<int>();
 
-        if (allEnabledRules.Count > 0)
+        var touchesHelperBoundaryTopology =
+            helperOperations.Length > 0
+            || boundaryOperations.Length > 0;
+
+        if (touchesHelperBoundaryTopology
+            && allEnabledRules.Count > 0)
         {
             var resolved =
                 HelperAnchorResolver.Resolve(
@@ -477,35 +482,38 @@ public static class ReviewImportApplier
                     x => x.Position));
         }
 
-        foreach (var position
-            in existingHelperPositions)
+        if (touchesHelperBoundaryTopology)
         {
-            if (afterBoundaries.Contains(
-                position))
+            foreach (var position
+                in existingHelperPositions)
             {
-                error =
-                    $"Existing helper and <w0> boundary collide at clean-text position {position}.";
-                return false;
-            }
-        }
-
-        foreach (var helper
-            in helperOperations)
-        {
-            if (existingHelperPositions.Contains(
-                helper.CleanTextPosition))
-            {
-                error =
-                    $"A helper already resolves to clean-text boundary {helper.CleanTextPosition}.";
-                return false;
+                if (afterBoundaries.Contains(
+                    position))
+                {
+                    error =
+                        $"Existing helper and <w0> boundary collide at clean-text position {position}.";
+                    return false;
+                }
             }
 
-            if (afterBoundaries.Contains(
-                helper.CleanTextPosition))
+            foreach (var helper
+                in helperOperations)
             {
-                error =
-                    $"Helper and <w0> boundary cannot share clean-text position {helper.CleanTextPosition}.";
-                return false;
+                if (existingHelperPositions.Contains(
+                    helper.CleanTextPosition))
+                {
+                    error =
+                        $"A helper already resolves to clean-text boundary {helper.CleanTextPosition}.";
+                    return false;
+                }
+
+                if (afterBoundaries.Contains(
+                    helper.CleanTextPosition))
+                {
+                    error =
+                        $"Helper and <w0> boundary cannot share clean-text position {helper.CleanTextPosition}.";
+                    return false;
+                }
             }
         }
 
@@ -921,12 +929,14 @@ internal sealed class EffectTransition
         Effect.Prosody =
             state.Prosody;
 
+        string? error;
+
         var ok =
             state.Present
                 ? ReviewAssistEffectCollection.TryAdd(
                     voice,
                     Effect,
-                    out var error)
+                    out error)
                 : ReviewAssistEffectCollection.TryRemove(
                     voice,
                     Effect,
