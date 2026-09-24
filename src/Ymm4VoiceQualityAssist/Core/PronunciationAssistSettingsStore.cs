@@ -44,6 +44,19 @@ public sealed record PronunciationAssistSettingsSnapshot(
 
 public static class PronunciationAssistSettingsStore
 {
+    static readonly HashSet<string> StorageCollectionProperties =
+        new(StringComparer.Ordinal)
+        {
+            nameof(VoiceItem.AudioEffects),
+            nameof(VoiceItem.JimakuVideoEffects),
+        };
+
+    public static bool IsStorageCollectionProperty(
+        string? propertyName) =>
+        propertyName is not null
+        && StorageCollectionProperties.Contains(
+            propertyName);
+
     public static IReadOnlyList<PronunciationAssistSettingsEntry>
         EnumerateEntries(
             VoiceItem voice)
