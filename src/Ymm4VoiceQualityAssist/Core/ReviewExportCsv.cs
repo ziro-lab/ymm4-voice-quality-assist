@@ -25,6 +25,9 @@ public static class ReviewExportCsv
         "boundaries",
         "prosody",
         "helperRules",
+        "hasGeneratedPronounce",
+        "generatedMoraReading",
+        "accentPhraseCount",
         "sourceFingerprint",
     ];
 
@@ -84,6 +87,18 @@ public static class ReviewExportCsv
                         voice.Assist),
                     FormatHelpers(
                         voice.Assist),
+                    voice.Pronunciation
+                        .HasGeneratedPronounce
+                        .ToString(
+                            CultureInfo.InvariantCulture),
+                    voice.Pronunciation
+                        .GeneratedMoraReading
+                        ?? string.Empty,
+                    voice.Pronunciation
+                        .AccentPhraseCount
+                        ?.ToString(
+                            CultureInfo.InvariantCulture)
+                        ?? string.Empty,
                     voice.SourceFingerprint,
                 ]);
         }
