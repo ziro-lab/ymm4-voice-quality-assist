@@ -5,8 +5,23 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **Track A A0–A3 + Track B B0–B3 green / early prototype**  
+> Status: **vNext Phase 1 GREEN / Phase 2 Audio Effect migration in progress**  
 > 現時点では配布版プラグインはありません。
+
+## vNext 現在地
+
+候補版フィードバックを受け、発音補助の句境界仕様をvNextへ更新しています。
+
+- 強制区切りは「既存pauseを0にする」意味ではなく、`<w0>`位置へ解析時だけ日本語読点 `、` を注入し、VOICEVOXに通常の自動アクセント再解析をさせたうえで、**注入した読点のPauseMoraだけを0**にします。
+- 元からある読点pauseは変更しません。
+- Phase 1製品実装はPR #12 / source `ac9d530f00a59efc67ee396b04d4d29d962a3bf1` で unit 157/157 + A1/A2/A3/B3 native GREENです。
+- Lab PR #142で `VoiceItem.AudioEffects` のpublic列挙・追加/削除・設定UI・通知・pass-through・Undo/Redo・save/reloadがGREENになりました。
+- Phase 2では `PronunciationAssistSettingsStore` を導入し、**新規設定はAudio Effect、旧候補版の字幕Effectはdual-read + 明示migration**へ移行中です。
+- Harmony/private collection traversalはこの移行に不要です。
+
+正本:
+- `docs/VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md`
+- `docs/VNEXT_IMPLEMENTATION_PLAN.md`
 
 ## 二本柱
 
