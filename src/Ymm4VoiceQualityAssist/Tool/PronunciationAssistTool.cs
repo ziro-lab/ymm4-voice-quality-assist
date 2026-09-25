@@ -959,7 +959,7 @@ public sealed class PronunciationAssistToolViewModel :
         catch (Exception ex)
         {
             string? rollbackError = null;
-            try { journal.UndoOrThrow(); }
+            try { journal.RollbackOrThrow(); }
             catch (Exception rollback) { rollbackError = rollback.GetBaseException().Message; }
             return ReviewImportExecutionResult.Failure(
                 (rollbackError is null ? "履歴登録に失敗し、変更を戻しました: "
