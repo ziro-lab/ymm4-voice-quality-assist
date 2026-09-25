@@ -2170,9 +2170,9 @@ internal static class Probe
                     timelineReferenceChanged =
                         FindActiveTimeline(
                             main)
-                        is { } currentTimeline
+                        is { } observedTimeline
                         && !ReferenceEquals(
-                            currentTimeline,
+                            observedTimeline,
                             previousTimeline),
                     reloaded.Serif,
                     markerPositions =
