@@ -7,7 +7,7 @@ namespace Ymm4VoiceQualityAssist.Tests;
 public sealed class ForcedBoundaryEditPlannerTests
 {
     [Fact]
-    public void NormalizeTokens_CommitUndoRedo_IsExact()
+    public void NormalizeTokens_CommitAndRollback_AreExact()
     {
         var voice =
             CreateVoice(
@@ -42,16 +42,10 @@ public sealed class ForcedBoundaryEditPlannerTests
             "A<w0>B<w0>C",
             voice.Serif);
 
-        journal.UndoOrThrow();
+        journal.RollbackOrThrow();
 
         Assert.Equal(
             "A|B|C",
-            voice.Serif);
-
-        journal.RedoOrThrow();
-
-        Assert.Equal(
-            "A<w0>B<w0>C",
             voice.Serif);
     }
 
@@ -160,7 +154,7 @@ public sealed class ForcedBoundaryEditPlannerTests
     }
 
     [Fact]
-    public void Insert_CommitUndoRedo_IsExact()
+    public void Insert_CommitAndRollback_AreExact()
     {
         var voice =
             CreateVoice(
@@ -188,16 +182,10 @@ public sealed class ForcedBoundaryEditPlannerTests
             "AB<w0>C",
             voice.Serif);
 
-        journal.UndoOrThrow();
+        journal.RollbackOrThrow();
 
         Assert.Equal(
             "ABC",
-            voice.Serif);
-
-        journal.RedoOrThrow();
-
-        Assert.Equal(
-            "AB<w0>C",
             voice.Serif);
     }
 
