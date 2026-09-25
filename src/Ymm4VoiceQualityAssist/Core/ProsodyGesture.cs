@@ -1,10 +1,27 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Ymm4VoiceQualityAssist.Core;
 
 public enum ProsodyGesture
 {
+    [Display(
+        Name = "なし",
+        Description = "VOICEVOXの抑揚をそのまま使います。")]
     None,
+
+    [Display(
+        Name = "軽く上げる",
+        Description = "語尾へ向かって軽く上げます。")]
     LightRise,
+
+    [Display(
+        Name = "軽く下げる",
+        Description = "語尾へ向かって軽く下げます。")]
     LightFall,
+
+    [Display(
+        Name = "平らに寄せる",
+        Description = "元の抑揚を残しながら高低差を軽く抑えます。")]
     Hold,
 }
 

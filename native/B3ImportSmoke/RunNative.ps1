@@ -8,6 +8,37 @@ param(
 $ErrorActionPreference='Stop'
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
 
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class VqaB3Win32 {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+}
+'@
+
+function Get-VqaB3Windows {
+  $script:rows=@()
+  $callback=[VqaB3Win32+EnumWindowsProc]{
+    param([IntPtr]$hWnd,[IntPtr]$lParam)
+    if([VqaB3Win32]::IsWindowVisible($hWnd)){
+      $sb=New-Object System.Text.StringBuilder 1024
+      [void][VqaB3Win32]::GetWindowText($hWnd,$sb,$sb.Capacity)
+      $title=$sb.ToString()
+      if(-not [string]::IsNullOrWhiteSpace($title)){
+        $script:rows += [pscustomobject]@{Handle=$hWnd;Title=$title}
+      }
+    }
+    return $true
+  }
+  [void][VqaB3Win32]::EnumWindows($callback,[IntPtr]::Zero)
+  return $script:rows
+}
+
 $port=50134
 $serverScript=Join-Path $PSScriptRoot 'fake_voicevox.py'
 $server=Start-Process python -ArgumentList @(
@@ -49,6 +80,35 @@ try {
     $limit=[DateTime]::UtcNow.AddSeconds(180)
 
     while([DateTime]::UtcNow-lt$limit -and -not$process.HasExited -and -not(Test-Path $result)){
+      foreach($w in (Get-VqaB3Windows)){
+        "$([DateTime]::UtcNow.ToString('O')) title=$($w.Title)" |
+          Add-Content (Join-Path $OutputDir 'host-windows.txt')
+
+        if($w.Title -like '*Check for updates*' -or
+           $w.Title -like '*About YukkuriMovieMaker*'){
+          [void][VqaB3Win32]::PostMessage(
+            $w.Handle,
+            0x0010,
+            [IntPtr]::Zero,
+            [IntPtr]::Zero
+          )
+        }
+        elseif($w.Title -eq 'Confirm'){
+          [void][VqaB3Win32]::PostMessage(
+            $w.Handle,
+            0x0100,
+            [IntPtr]0x0D,
+            [IntPtr]::Zero
+          )
+          [void][VqaB3Win32]::PostMessage(
+            $w.Handle,
+            0x0101,
+            [IntPtr]0x0D,
+            [IntPtr]::Zero
+          )
+        }
+      }
+
       Start-Sleep -Milliseconds 350
     }
 
@@ -58,6 +118,12 @@ try {
 
     $r=Get-Content -Raw $result|ConvertFrom-Json
     Get-Content $result
+
+    $hostWindows=Join-Path $OutputDir 'host-windows.txt'
+    if(Test-Path $hostWindows){
+      Write-Output '--- host windows ---'
+      Get-Content $hostWindows
+    }
 
     $observation=Join-Path $OutputDir 'b3-import-observation.json'
     if(Test-Path $observation){
@@ -69,6 +135,12 @@ try {
     if(Test-Path $migrationObservation){
       Write-Output '--- legacy migration observation ---'
       Get-Content $migrationObservation
+    }
+
+    $typedUiObservation=Join-Path $OutputDir 'typed-settings-ui-observation.json'
+    if(Test-Path $typedUiObservation){
+      Write-Output '--- typed settings UI observation ---'
+      Get-Content $typedUiObservation
     }
 
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
@@ -122,7 +194,16 @@ try {
       'migration_settings_exact',
       'migration_recorded_once',
       'migration_undo_restores_legacy',
-      'migration_redo_restores_audio'
+      'migration_redo_restores_audio',
+      'typed_ui_voice_selected',
+      'typed_ui_audio_effect_selected',
+      'typed_ui_helper_editor_visible',
+      'typed_ui_prosody_editor_visible',
+      'typed_ui_raw_json_hidden',
+      'typed_ui_initial_helper_rule_visible',
+      'typed_ui_helper_edit_applied',
+      'typed_ui_helper_undo',
+      'typed_ui_helper_redo'
     )
 
     if($r.requirements.Count-ne$required.Count){

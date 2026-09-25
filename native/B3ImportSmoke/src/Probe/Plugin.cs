@@ -5,6 +5,10 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Newtonsoft.Json.Linq;
 using Ymm4VoiceQualityAssist.Core;
@@ -540,6 +544,8 @@ internal static class Probe
             manager.Redoed +=
                 redoedHandler;
 
+            PronunciationAssistAudioEffect? typedUiEffect = null;
+
             try
             {
                 var commit =
@@ -576,6 +582,11 @@ internal static class Probe
                             x.IsEnabled)
                     ?? throw new InvalidOperationException(
                         "Enabled Assist Effect missing after B3 apply.");
+
+                typedUiEffect =
+                    effect as PronunciationAssistAudioEffect
+                    ?? throw new InvalidOperationException(
+                        "B3 newly-created Assist Effect was not the canonical Audio Effect.");
 
                 Check(
                     "assist_effect_created",
@@ -780,6 +791,15 @@ internal static class Probe
                     redoedHandler;
             }
 
+            await RunTypedSettingsUiLifecycleAsync(
+                timeline,
+                main,
+                selected,
+                typedUiEffect
+                    ?? throw new InvalidOperationException(
+                        "Typed UI target effect was unavailable."),
+                manager);
+
             await RunLegacyMigrationLifecycleAsync(
                 timeline,
                 character,
@@ -791,6 +811,1002 @@ internal static class Probe
             registration.Restore();
         }
     }
+
+    static async Task RunTypedSettingsUiLifecycleAsync(
+        Timeline timeline,
+        object main,
+        VoiceItem voice,
+        PronunciationAssistAudioEffect effect,
+        UndoRedoManager manager)
+    {
+        timeline.CurrentFrame =
+            voice.Frame;
+
+        timeline.SelectItems(
+            [voice]);
+
+        await WaitUntil(
+            "typed UI VoiceItem selection",
+            () =>
+                timeline.SelectedItems
+                    .Any(x =>
+                        ReferenceEquals(
+                            x,
+                            voice)),
+            5_000);
+
+        var selectionAttempted =
+            timeline.SelectedItems
+                .Any(x =>
+                    ReferenceEquals(
+                        x,
+                        voice));
+
+        // Keep the ViewModel route only as a compatibility fallback if a
+        // future host stops updating Item Editor from the public Timeline API.
+        if (!selectionAttempted)
+        {
+            selectionAttempted =
+                SelectVoiceInItemEditorFallback(
+                    main,
+                    voice);
+        }
+
+        await Task.Delay(500);
+
+        RealizeItemEditor();
+
+        await Task.Delay(300);
+
+        WriteTypedUiDiagnostic(
+            "before-effect-selection",
+            effect);
+
+        var effectSelected =
+            SelectAudioEffectInEditor(
+                effect);
+
+        WriteTypedUiDiagnostic(
+            "after-effect-selection",
+            effect);
+
+        await Task.Delay(500);
+
+        RealizeItemEditor();
+
+        await Task.Delay(350);
+
+        var visible =
+            Application.Current.Windows
+                .Cast<Window>()
+                .SelectMany(
+                    EnumerateVisual)
+                .OfType<FrameworkElement>()
+                .Where(x =>
+                    x.IsVisible)
+                .ToArray();
+
+        var texts =
+            visible
+                .Select(GetText)
+                .OfType<string>()
+                .Where(x =>
+                    !string.IsNullOrWhiteSpace(
+                        x))
+                .Distinct(
+                    StringComparer.Ordinal)
+                .ToArray();
+
+        var helperEditor =
+            visible.FirstOrDefault(x =>
+                string.Equals(
+                    AutomationProperties
+                        .GetAutomationId(x),
+                    "VqaHelperRulesEditor",
+                    StringComparison.Ordinal));
+
+        var helperText =
+            visible.OfType<TextBox>()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        AutomationProperties
+                            .GetAutomationId(x),
+                        "VqaHelperNewText",
+                        StringComparison.Ordinal));
+
+        var helperKind =
+            visible.OfType<ComboBox>()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        AutomationProperties
+                            .GetAutomationId(x),
+                        "VqaHelperNewKind",
+                        StringComparison.Ordinal));
+
+        var helperPosition =
+            visible.OfType<TextBox>()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        AutomationProperties
+                            .GetAutomationId(x),
+                        "VqaHelperNewPosition",
+                        StringComparison.Ordinal));
+
+        var helperAdd =
+            visible.OfType<Button>()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        AutomationProperties
+                            .GetAutomationId(x),
+                        "VqaHelperNewAdd",
+                        StringComparison.Ordinal));
+
+        Check(
+            "typed_ui_voice_selected",
+            selectionAttempted);
+
+        Check(
+            "typed_ui_audio_effect_selected",
+            effectSelected);
+
+        Check(
+            "typed_ui_helper_editor_visible",
+            helperEditor is not null
+            && helperText is not null
+            && helperKind is not null
+            && helperPosition is not null
+            && helperAdd is not null
+            && texts.Any(x =>
+                x.Contains(
+                    "補助文字",
+                    StringComparison.Ordinal))
+            && texts.Any(x =>
+                x.Contains(
+                    "本文位置",
+                    StringComparison.Ordinal))
+            && texts.Any(x =>
+                x.Contains(
+                    "新しい補助モーラ",
+                    StringComparison.Ordinal)));
+
+        Check(
+            "typed_ui_prosody_editor_visible",
+            texts.Any(x =>
+                string.Equals(
+                    x,
+                    "抑揚",
+                    StringComparison.Ordinal))
+            && texts.Any(x =>
+                x.Contains(
+                    "平らに寄せる",
+                    StringComparison.Ordinal)));
+
+        var beforeJson =
+            effect.HelperRulesJson;
+
+        Check(
+            "typed_ui_raw_json_hidden",
+            !visible.OfType<TextBox>()
+                .Any(x =>
+                    string.Equals(
+                        x.Text,
+                        beforeJson,
+                        StringComparison.Ordinal)
+                    || x.Text.Contains(
+                        "\"version\"",
+                        StringComparison.Ordinal)));
+
+        HelperRuleCodec.TryDecode(
+            beforeJson,
+            out var beforeRules,
+            out _);
+
+        Check(
+            "typed_ui_initial_helper_rule_visible",
+            beforeRules.Rules.Count == 1
+            && texts.Any(x =>
+                x.Contains(
+                    "ルール 1",
+                    StringComparison.Ordinal)));
+
+        manager.Record();
+
+        var recorded = 0;
+        var undoed = 0;
+        var redoed = 0;
+
+        EventHandler recordedHandler =
+            (_, _) =>
+                recorded++;
+
+        EventHandler undoedHandler =
+            (_, _) =>
+                undoed++;
+
+        EventHandler redoedHandler =
+            (_, _) =>
+                redoed++;
+
+        manager.Recorded +=
+            recordedHandler;
+        manager.Undoed +=
+            undoedHandler;
+        manager.Redoed +=
+            redoedHandler;
+
+        try
+        {
+            helperText!.Text =
+                "ア";
+
+            helperKind!.SelectedValue =
+                HelperMoraKind.ZeroVowel;
+
+            helperPosition!.Text =
+                "3";
+
+            helperAdd!.RaiseEvent(
+                new RoutedEventArgs(
+                    Button.ClickEvent));
+
+            await WaitUntil(
+                "typed helper UI add",
+                () =>
+                {
+                    if (!HelperRuleCodec.TryDecode(
+                        effect.HelperRulesJson,
+                        out var decoded,
+                        out _))
+                    {
+                        return false;
+                    }
+
+                    return decoded.Rules.Count == 2
+                        && decoded.Rules.Any(x =>
+                            x.Helper == "ア"
+                            && x.Kind
+                                == HelperMoraKind.ZeroVowel
+                            && x.Anchor.Position == 3);
+                },
+                10_000);
+
+            Check(
+                "typed_ui_helper_edit_applied",
+                recorded == 1);
+
+            if (recorded != 1)
+            {
+                throw new InvalidOperationException(
+                    "Typed helper editor did not create exactly one YMM4 undo record.");
+            }
+
+            await manager.UndoAsync();
+
+            await WaitUntil(
+                "typed helper UI undo",
+                () =>
+                    string.Equals(
+                        effect.HelperRulesJson,
+                        beforeJson,
+                        StringComparison.Ordinal),
+                10_000);
+
+            Check(
+                "typed_ui_helper_undo",
+                undoed == 1);
+
+            await manager.RedoAsync();
+
+            await WaitUntil(
+                "typed helper UI redo",
+                () =>
+                {
+                    if (!HelperRuleCodec.TryDecode(
+                        effect.HelperRulesJson,
+                        out var decoded,
+                        out _))
+                    {
+                        return false;
+                    }
+
+                    return decoded.Rules.Count == 2
+                        && decoded.Rules.Any(x =>
+                            x.Helper == "ア"
+                            && x.Anchor.Position == 3);
+                },
+                10_000);
+
+            Check(
+                "typed_ui_helper_redo",
+                redoed == 1
+                && effect.Prosody
+                    == ProsodyGesture.Hold);
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "typed-settings-ui-observation.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        selectionAttempted,
+                        effectSelected,
+                        visibleLabels =
+                            texts.Where(x =>
+                                x.Contains(
+                                    "補助",
+                                    StringComparison.Ordinal)
+                                || x.Contains(
+                                    "抑揚",
+                                    StringComparison.Ordinal)
+                                || x.Contains(
+                                    "母音",
+                                    StringComparison.Ordinal)
+                                || x.Contains(
+                                    "本文位置",
+                                    StringComparison.Ordinal)
+                                || x.Contains(
+                                    "平ら",
+                                    StringComparison.Ordinal))
+                            .Take(80)
+                            .ToArray(),
+                        recorded,
+                        undoed,
+                        redoed,
+                        finalHelperRulesJson =
+                            effect.HelperRulesJson,
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        finally
+        {
+            manager.Recorded -=
+                recordedHandler;
+            manager.Undoed -=
+                undoedHandler;
+            manager.Redoed -=
+                redoedHandler;
+        }
+    }
+
+    static bool SelectVoiceInItemEditorFallback(
+        object main,
+        VoiceItem voice)
+    {
+        var active =
+            main.GetType()
+                .GetProperty(
+                    "ActiveTimelineViewModel",
+                    BindingFlags.Instance
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                ?.GetValue(main);
+
+        if (active is null)
+            return false;
+
+        var items =
+            active.GetType()
+                .GetProperty(
+                    "Items",
+                    BindingFlags.Instance
+                    | BindingFlags.Public)
+                ?.GetValue(active)
+            as IEnumerable;
+
+        if (items is null)
+            return false;
+
+        var vm =
+            items.Cast<object>()
+                .FirstOrDefault(x =>
+                    ReferenceEquals(
+                        x.GetType()
+                            .GetProperty(
+                                "Item",
+                                BindingFlags.Instance
+                                | BindingFlags.Public)
+                            ?.GetValue(x),
+                        voice));
+
+        if (vm is null)
+            return false;
+
+        var attempted =
+            false;
+
+        foreach (var property
+            in vm.GetType()
+                .GetProperties(
+                    BindingFlags.Instance
+                    | BindingFlags.Public)
+                .Where(x =>
+                    x.Name.Contains(
+                        "Select",
+                        StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                if (property.PropertyType
+                    == typeof(bool)
+                    && property.SetMethod?.IsPublic
+                        == true)
+                {
+                    property.SetValue(
+                        vm,
+                        true);
+
+                    attempted =
+                        true;
+                }
+
+                if (typeof(ICommand)
+                    .IsAssignableFrom(
+                        property.PropertyType)
+                    && property.GetValue(vm)
+                        is ICommand command)
+                {
+                    foreach (var parameter
+                        in new object?[]
+                        {
+                            null,
+                            vm,
+                            voice,
+                        })
+                    {
+                        if (!command.CanExecute(
+                            parameter))
+                        {
+                            continue;
+                        }
+
+                        command.Execute(
+                            parameter);
+
+                        attempted =
+                            true;
+
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var method
+            in active.GetType()
+                .GetMethods(
+                    BindingFlags.Instance
+                    | BindingFlags.Public)
+                .Where(x =>
+                    x.Name.Contains(
+                        "Select",
+                        StringComparison.OrdinalIgnoreCase)
+                    && x.GetParameters()
+                        .Length == 1))
+        {
+            try
+            {
+                var parameterType =
+                    method.GetParameters()[0]
+                        .ParameterType;
+
+                if (parameterType
+                    .IsInstanceOfType(vm))
+                {
+                    method.Invoke(
+                        active,
+                        [vm]);
+
+                    attempted =
+                        true;
+                }
+                else if (parameterType
+                    .IsInstanceOfType(voice))
+                {
+                    method.Invoke(
+                        active,
+                        [voice]);
+
+                    attempted =
+                        true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return attempted;
+    }
+
+    static void RealizeItemEditor()
+    {
+        foreach (Window window
+            in Application.Current.Windows)
+        {
+            foreach (var viewer
+                in EnumerateVisual(window)
+                    .OfType<ScrollViewer>())
+            {
+                try
+                {
+                    if (viewer.IsVisible
+                        && viewer.ScrollableHeight > 0)
+                    {
+                        viewer.ScrollToVerticalOffset(
+                            viewer.ScrollableHeight);
+
+                        viewer.UpdateLayout();
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            foreach (var expander
+                in EnumerateVisual(window)
+                    .OfType<Expander>())
+            {
+                var header =
+                    expander.Header
+                        ?.ToString()
+                    ?? string.Empty;
+
+                if (header.Contains(
+                        "発音補助",
+                        StringComparison.Ordinal)
+                    || header.Contains(
+                        "音声",
+                        StringComparison.Ordinal)
+                    || header.Contains(
+                        "Audio",
+                        StringComparison.OrdinalIgnoreCase)
+                    || header.Contains(
+                        "エフェクト",
+                        StringComparison.Ordinal)
+                    || header.Contains(
+                        "Effect",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    expander.IsExpanded =
+                        true;
+
+                    try
+                    {
+                        expander.UpdateLayout();
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+    }
+
+    static void WriteTypedUiDiagnostic(
+        string phase,
+        PronunciationAssistAudioEffect effect)
+    {
+        try
+        {
+            var windows =
+                Application.Current.Windows
+                    .Cast<Window>()
+                    .ToArray();
+
+            var visual =
+                windows
+                    .SelectMany(
+                        EnumerateVisual)
+                    .OfType<FrameworkElement>()
+                    .ToArray();
+
+            object DescribeElement(
+                FrameworkElement element) =>
+                new
+                {
+                    type =
+                        element.GetType()
+                            .FullName,
+                    element.Name,
+                    visible =
+                        element.IsVisible,
+                    text =
+                        GetText(element),
+                    dataContextType =
+                        element.DataContext
+                            ?.GetType()
+                            .FullName,
+                    dataContextIsTarget =
+                        ReferenceEquals(
+                            element.DataContext,
+                            effect),
+                    automationId =
+                        AutomationProperties
+                            .GetAutomationId(
+                                element),
+                    element.ActualWidth,
+                    element.ActualHeight,
+                };
+
+            var listBoxes =
+                visual
+                    .OfType<ListBox>()
+                    .Select(list =>
+                        new
+                        {
+                            element =
+                                DescribeElement(
+                                    list),
+                            items =
+                                list.Items
+                                    .Cast<object>()
+                                    .Select((item, index) =>
+                                    {
+                                        var container =
+                                            list.ItemContainerGenerator
+                                                .ContainerFromIndex(
+                                                    index)
+                                            as ListBoxItem;
+
+                                        return new
+                                        {
+                                            index,
+                                            itemType =
+                                                item.GetType()
+                                                    .FullName,
+                                            itemIsTarget =
+                                                ReferenceEquals(
+                                                    item,
+                                                    effect),
+                                            itemDataContextType =
+                                                (item as FrameworkElement)
+                                                    ?.DataContext
+                                                    ?.GetType()
+                                                    .FullName,
+                                            itemDataContextIsTarget =
+                                                ReferenceEquals(
+                                                    (item as FrameworkElement)
+                                                        ?.DataContext,
+                                                    effect),
+                                            container =
+                                                container is null
+                                                    ? null
+                                                    : DescribeElement(
+                                                        container),
+                                        };
+                                    })
+                                    .ToArray(),
+                        })
+                    .ToArray();
+
+            var targetDataContexts =
+                visual
+                    .Where(x =>
+                        ReferenceEquals(
+                            x.DataContext,
+                            effect))
+                    .Select(
+                        DescribeElement)
+                    .ToArray();
+
+            var relevant =
+                visual
+                    .Where(x =>
+                    {
+                        var text =
+                            GetText(x)
+                            ?? string.Empty;
+
+                        var type =
+                            x.GetType()
+                                .FullName
+                            ?? string.Empty;
+
+                        var dc =
+                            x.DataContext
+                                ?.GetType()
+                                .FullName
+                            ?? string.Empty;
+
+                        return text.Contains(
+                                "発音補助",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "音声エフェクト",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "Audio",
+                                StringComparison.OrdinalIgnoreCase)
+                            || text.Contains(
+                                "補助モーラ",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "抑揚",
+                                StringComparison.Ordinal)
+                            || type.Contains(
+                                "AudioEffect",
+                                StringComparison.OrdinalIgnoreCase)
+                            || dc.Contains(
+                                "AudioEffect",
+                                StringComparison.OrdinalIgnoreCase)
+                            || ReferenceEquals(
+                                x.DataContext,
+                                effect);
+                    })
+                    .Take(250)
+                    .Select(
+                        DescribeElement)
+                    .ToArray();
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"typed-ui-{phase}.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        phase,
+                        effectType =
+                            effect.GetType()
+                                .FullName,
+                        audioEffectCount =
+                            Application.Current.Windows
+                                .Cast<Window>()
+                                .Count(),
+                        targetDataContextCount =
+                            targetDataContexts.Length,
+                        listBoxes,
+                        targetDataContexts,
+                        relevant,
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        catch (Exception ex)
+        {
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"typed-ui-{phase}-diagnostic-error.txt"),
+                ex.ToString());
+        }
+    }
+
+    static bool SelectAudioEffectInEditor(
+        PronunciationAssistAudioEffect effect)
+    {
+        var selected =
+            false;
+
+        foreach (Window window
+            in Application.Current.Windows)
+        {
+            var visual =
+                EnumerateVisual(window)
+                    .ToArray();
+
+            // Real YMM4's AudioEffectSelector may expose wrapper items in the
+            // ListBox.Items collection while the realized ListBoxItem itself
+            // carries the effect as DataContext. Prefer the realized host shape.
+            foreach (var container
+                in visual
+                    .OfType<ListBoxItem>()
+                    .Where(x =>
+                        ReferenceEquals(
+                            x.DataContext,
+                            effect)))
+            {
+                try
+                {
+                    container.IsSelected =
+                        true;
+
+                    container.Focus();
+                    container.BringIntoView();
+                    container.UpdateLayout();
+
+                    var parent =
+                        FindVisualAncestor<ListBox>(
+                            container);
+
+                    if (parent is not null)
+                    {
+                        try
+                        {
+                            var item =
+                                parent.ItemContainerGenerator
+                                    .ItemFromContainer(
+                                        container);
+
+                            if (item is not null
+                                && item
+                                    != DependencyProperty.UnsetValue)
+                            {
+                                parent.SelectedItem =
+                                    item;
+                            }
+
+                            parent.UpdateLayout();
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    selected |=
+                        container.IsSelected;
+                }
+                catch
+                {
+                }
+            }
+
+            if (selected)
+                continue;
+
+            // Fallback for hosts where the effect is the item directly.
+            foreach (var listBox
+                in visual
+                    .OfType<ListBox>())
+            {
+                try
+                {
+                    var target =
+                        listBox.Items
+                            .Cast<object>()
+                            .FirstOrDefault(x =>
+                                ReferenceEquals(
+                                    x,
+                                    effect)
+                                || ReferenceEquals(
+                                    (x as FrameworkElement)
+                                        ?.DataContext,
+                                    effect));
+
+                    if (target is null)
+                        continue;
+
+                    listBox.SelectedItem =
+                        target;
+
+                    listBox.UpdateLayout();
+
+                    if (listBox.ItemContainerGenerator
+                        .ContainerFromItem(
+                            target)
+                        is ListBoxItem container)
+                    {
+                        container.IsSelected =
+                            true;
+
+                        container.Focus();
+                        container.BringIntoView();
+                        container.UpdateLayout();
+
+                        selected |=
+                            container.IsSelected;
+                    }
+                    else
+                    {
+                        selected |=
+                            ReferenceEquals(
+                                listBox.SelectedItem,
+                                target);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        return selected;
+    }
+
+    static T? FindVisualAncestor<T>(
+        DependencyObject start)
+        where T : DependencyObject
+    {
+        DependencyObject? current =
+            start;
+
+        while (current is not null)
+        {
+            if (current is T typed)
+                return typed;
+
+            try
+            {
+                current =
+                    VisualTreeHelper.GetParent(
+                        current);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    static IEnumerable<DependencyObject>
+        EnumerateVisual(
+            DependencyObject root)
+    {
+        yield return root;
+
+        int count;
+
+        try
+        {
+            count =
+                VisualTreeHelper
+                    .GetChildrenCount(
+                        root);
+        }
+        catch
+        {
+            yield break;
+        }
+
+        for (var index = 0;
+             index < count;
+             index++)
+        {
+            DependencyObject child;
+
+            try
+            {
+                child =
+                    VisualTreeHelper
+                        .GetChild(
+                            root,
+                            index);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var descendant
+                in EnumerateVisual(
+                    child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    static string? GetText(
+        DependencyObject value) =>
+        value switch
+        {
+            TextBlock text =>
+                text.Text,
+            Label label =>
+                label.Content?.ToString(),
+            GroupBox group =>
+                group.Header?.ToString(),
+            Expander expander =>
+                expander.Header?.ToString(),
+            ContentControl content
+                when content.Content
+                    is string text =>
+                text,
+            _ =>
+                null,
+        };
 
     static async Task RunLegacyMigrationLifecycleAsync(
         Timeline timeline,

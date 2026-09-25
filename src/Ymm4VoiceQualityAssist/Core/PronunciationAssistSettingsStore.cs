@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Ymm4VoiceQualityAssist.Effects;
 using YukkuriMovieMaker.Project.Items;
 
@@ -44,6 +45,14 @@ public sealed record PronunciationAssistSettingsSnapshot(
 
 public static class PronunciationAssistSettingsStore
 {
+    static readonly ConditionalWeakTable<
+        IPronunciationAssistSettings,
+        OwnerReference> Owners =
+        new();
+
+    static readonly object OwnerSync =
+        new();
+
     static readonly HashSet<string> StorageCollectionProperties =
         new(StringComparer.Ordinal)
         {
@@ -90,7 +99,38 @@ public static class PronunciationAssistSettingsStore
                             PronunciationAssistStorageKind.LegacySubtitleEffect)));
         }
 
+        foreach (var entry in result)
+        {
+            BindOwner(
+                entry.Settings,
+                voice);
+        }
+
         return result;
+    }
+
+    public static bool TryGetOwner(
+        IPronunciationAssistSettings settings,
+        out VoiceItem? voice)
+    {
+        ArgumentNullException.ThrowIfNull(
+            settings);
+
+        lock (OwnerSync)
+        {
+            if (Owners.TryGetValue(
+                    settings,
+                    out var owner))
+            {
+                voice =
+                    owner.Voice;
+
+                return true;
+            }
+
+            voice = null;
+            return false;
+        }
     }
 
     public static IReadOnlyList<IPronunciationAssistSettings>
@@ -155,32 +195,46 @@ public static class PronunciationAssistSettingsStore
 
         if (Contains(voice, settings))
         {
+            BindOwner(
+                settings,
+                voice);
+
             error = null;
             return true;
         }
 
-        return settings switch
+        var added =
+            settings switch
+            {
+                PronunciationAssistAudioEffect audio =>
+                    TryMutatePublicCollection(
+                        voice,
+                        nameof(VoiceItem.AudioEffects),
+                        audio,
+                        add: true,
+                        out error),
+
+                PronunciationAssistEffect legacy =>
+                    TryMutatePublicCollection(
+                        voice,
+                        nameof(VoiceItem.JimakuVideoEffects),
+                        legacy,
+                        add: true,
+                        out error),
+
+                _ => Unsupported(
+                    settings,
+                    out error),
+            };
+
+        if (added)
         {
-            PronunciationAssistAudioEffect audio =>
-                TryMutatePublicCollection(
-                    voice,
-                    nameof(VoiceItem.AudioEffects),
-                    audio,
-                    add: true,
-                    out error),
-
-            PronunciationAssistEffect legacy =>
-                TryMutatePublicCollection(
-                    voice,
-                    nameof(VoiceItem.JimakuVideoEffects),
-                    legacy,
-                    add: true,
-                    out error),
-
-            _ => Unsupported(
+            BindOwner(
                 settings,
-                out error),
-        };
+                voice);
+        }
+
+        return added;
     }
 
     public static bool TryRemove(
@@ -374,6 +428,29 @@ public static class PronunciationAssistSettingsStore
         error =
             $"{propertyName} public {methodName} route did not produce the requested membership state.";
         return false;
+    }
+
+    static void BindOwner(
+        IPronunciationAssistSettings settings,
+        VoiceItem voice)
+    {
+        lock (OwnerSync)
+        {
+            Owners.Remove(
+                settings);
+
+            Owners.Add(
+                settings,
+                new OwnerReference(
+                    voice));
+        }
+    }
+
+    sealed class OwnerReference(
+        VoiceItem voice)
+    {
+        public VoiceItem Voice { get; } =
+            voice;
     }
 
     static bool CollectionContains(
