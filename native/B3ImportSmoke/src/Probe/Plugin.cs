@@ -800,11 +800,12 @@ internal static class Probe
                         "Typed UI target effect was unavailable."),
                 manager);
 
-            await RunForcedBoundaryInputLifecycleAsync(
-                timeline,
-                character,
-                parameter,
-                manager);
+            var boundaryFixture =
+                await RunForcedBoundaryInputLifecycleAsync(
+                    timeline,
+                    character,
+                    parameter,
+                    manager);
 
             await RunLegacyMigrationLifecycleAsync(
                 timeline,
@@ -814,7 +815,8 @@ internal static class Probe
 
             await RunForcedBoundarySaveReloadAsync(
                 main,
-                timeline);
+                timeline,
+                boundaryFixture);
         }
         finally
         {
@@ -1827,11 +1829,12 @@ internal static class Probe
                 null,
         };
 
-    static async Task RunForcedBoundaryInputLifecycleAsync(
-        Timeline timeline,
-        Character character,
-        IVoiceParameter parameter,
-        UndoRedoManager manager)
+    static async Task<ForcedBoundaryPersistenceFixture>
+        RunForcedBoundaryInputLifecycleAsync(
+            Timeline timeline,
+            Character character,
+            IVoiceParameter parameter,
+            UndoRedoManager manager)
     {
         var voice =
             CreateVoice(
@@ -2021,14 +2024,19 @@ internal static class Probe
             manager.Redoed -=
                 redoedHandler;
         }
+
+        return new(
+            voice,
+            effect);
     }
 
     static async Task RunForcedBoundarySaveReloadAsync(
         object main,
-        Timeline previousTimeline)
+        Timeline previousTimeline,
+        ForcedBoundaryPersistenceFixture fixture)
     {
         const string remark =
-            "B3_FORCED_BOUNDARY_PERSISTENCE";
+            "B3_FORCED_BOUNDARY_INPUT";
 
         var save =
             PublicMethod(
@@ -2042,149 +2050,73 @@ internal static class Probe
                 "OpenProject",
                 typeof(string));
 
-        // Persist the completed B3 project first so creating a clean project
-        // cannot trigger an unsaved-changes prompt.
-        var prePersistenceProject =
-            Path.Combine(
-                output,
-                "phase4-before-persistence.ymmp");
+        // Reuse the already-proven Phase 4 VoiceItem instead of creating a
+        // second project/fixture. Persistence needs only one save + one reopen.
+        fixture.Effect.IsEnabled =
+            false;
 
-        save.Invoke(
-            main,
-            [prePersistenceProject]);
-
-        await WaitUntil(
-            "phase4 pre-persistence save",
-            () =>
-                File.Exists(
-                    prePersistenceProject)
-                && new FileInfo(
-                    prePersistenceProject)
-                    .Length > 0,
-            15_000);
-
-        var create =
-            PublicMethod(
-                main,
-                "CreateProject");
-
-        create.Invoke(
-            main,
-            null);
-
-        await WaitUntil(
-            "phase4 clean project creation",
-            () =>
-                FindActiveTimeline(
-                    main)
-                is { } active
-                && !ReferenceEquals(
-                    active,
-                    previousTimeline),
-            15_000);
-
-        var timeline =
-            FindActiveTimeline(
-                main)
-            ?? throw new InvalidOperationException(
-                "Clean persistence Timeline was not created.");
-
-        var voice =
-            new VoiceItem
-            {
-                Serif = "A<w0>B",
-                Hatsuon = "AB",
-                Remark = remark,
-            };
+        fixture.Effect.BoundaryInputToken =
+            "||";
 
         Check(
-            "forced_boundary_persistence_voice_added",
-            timeline.TryAddItems(
-                [voice],
-                0,
-                0));
+            "forced_boundary_persistence_fixture_ready",
+            string.Equals(
+                fixture.Voice.Remark,
+                remark,
+                StringComparison.Ordinal)
+            && string.Equals(
+                fixture.Voice.Serif,
+                "え<w0>ええ",
+                StringComparison.Ordinal)
+            && fixture.Effect.BoundaryInputToken
+                == "||"
+            && !fixture.Effect.IsEnabled);
 
-        var effect =
-            new PronunciationAssistAudioEffect
-            {
-                // Persistence proof only: keep runtime synthesis out of this
-                // save/reload scenario so it measures serialization alone.
-                IsEnabled = false,
-                BoundaryInputToken = "||",
-            };
-
-        Check(
-            "forced_boundary_persistence_effect_added",
-            PronunciationAssistSettingsStore
-                .TryAdd(
-                    voice,
-                    effect,
-                    out var addError)
-            && addError is null);
-
-        var projectA =
+        var project =
             Path.Combine(
                 output,
-                "phase4-boundary-a.ymmp");
-
-        var projectB =
-            Path.Combine(
-                output,
-                "phase4-boundary-b.ymmp");
+                "phase4-boundary-persistence.ymmp");
 
         save.Invoke(
             main,
-            [projectA]);
+            [project]);
 
         await WaitUntil(
-            "phase4 project A save",
+            "phase4 persistence save",
             () =>
                 File.Exists(
-                    projectA)
+                    project)
                 && new FileInfo(
-                    projectA)
-                    .Length > 0,
-            15_000);
-
-        effect.BoundaryInputToken =
-            "｜";
-
-        save.Invoke(
-            main,
-            [projectB]);
-
-        await WaitUntil(
-            "phase4 project B save",
-            () =>
-                File.Exists(
-                    projectB)
-                && new FileInfo(
-                    projectB)
+                    project)
                     .Length > 0,
             15_000);
 
         open.Invoke(
             main,
-            [projectA]);
+            [project]);
 
         await WaitUntil(
-            "phase4 project A reopen",
+            "phase4 persistence reopen",
             () =>
-                FindVoiceFromActiveTimeline(
-                    main,
-                    remark)
-                is { } loaded
-                && !ReferenceEquals(
-                    loaded,
-                    voice),
-            20_000);
+            {
+                var loaded =
+                    FindVoiceFromActiveTimeline(
+                        main,
+                        remark);
+
+                return loaded is not null
+                    && !ReferenceEquals(
+                        loaded,
+                        fixture.Voice);
+            },
+            30_000);
 
         var reloaded =
             FindVoiceFromActiveTimeline(
                 main,
                 remark)
             ?? throw new InvalidOperationException(
-                "Reloaded forced-boundary persistence VoiceItem was not found.");
+                "Reloaded forced-boundary VoiceItem was not found.");
 
         var restored =
             PronunciationAssistSettingsStore
@@ -2202,13 +2134,26 @@ internal static class Probe
             restored is not null
             && restored.BoundaryInputToken
                 == "||"
+            && !restored.IsEnabled
             && string.Equals(
                 reloaded.Serif,
-                "A<w0>B",
+                "え<w0>ええ",
                 StringComparison.Ordinal)
             && parsed.ZeroWaitPositions
                 .SequenceEqual(
                     [1]));
+
+        Check(
+            "forced_boundary_reload_replaces_live_objects",
+            !ReferenceEquals(
+                reloaded,
+                fixture.Voice)
+            && FindActiveTimeline(
+                main)
+                is { } currentTimeline
+            && !ReferenceEquals(
+                currentTimeline,
+                previousTimeline));
 
         File.WriteAllText(
             Path.Combine(
@@ -2217,24 +2162,37 @@ internal static class Probe
             JsonSerializer.Serialize(
                 new
                 {
-                    projectA,
-                    projectB,
-                    originalReferenceChanged =
+                    project,
+                    voiceReferenceChanged =
                         !ReferenceEquals(
                             reloaded,
-                            voice),
+                            fixture.Voice),
+                    timelineReferenceChanged =
+                        FindActiveTimeline(
+                            main)
+                        is { } currentTimeline
+                        && !ReferenceEquals(
+                            currentTimeline,
+                            previousTimeline),
                     reloaded.Serif,
                     markerPositions =
                         parsed.ZeroWaitPositions,
                     boundaryInputToken =
                         restored
                             ?.BoundaryInputToken,
+                    restoredEnabled =
+                        restored
+                            ?.IsEnabled,
                 },
                 new JsonSerializerOptions
                 {
                     WriteIndented = true,
                 }));
     }
+
+    sealed record ForcedBoundaryPersistenceFixture(
+        VoiceItem Voice,
+        PronunciationAssistAudioEffect Effect);
 
     static Timeline? FindActiveTimeline(
         object main)
