@@ -5,6 +5,7 @@ namespace Ymm4VoiceQualityAssist.Effects;
 public interface IPronunciationAssistSettings
 {
     bool IsEnabled { get; set; }
+    string BoundaryInputToken { get; set; }
     string HelperRulesJson { get; set; }
     ProsodyGesture Prosody { get; set; }
 }
