@@ -71,6 +71,12 @@ try {
       Get-Content $migrationObservation
     }
 
+    $typedUiObservation=Join-Path $OutputDir 'typed-settings-ui-observation.json'
+    if(Test-Path $typedUiObservation){
+      Write-Output '--- typed settings UI observation ---'
+      Get-Content $typedUiObservation
+    }
+
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
     if(Test-Path $requestsPath){
       Write-Output '--- fake VOICEVOX requests ---'
@@ -122,7 +128,16 @@ try {
       'migration_settings_exact',
       'migration_recorded_once',
       'migration_undo_restores_legacy',
-      'migration_redo_restores_audio'
+      'migration_redo_restores_audio',
+      'typed_ui_voice_selected',
+      'typed_ui_audio_effect_selected',
+      'typed_ui_helper_editor_visible',
+      'typed_ui_prosody_editor_visible',
+      'typed_ui_raw_json_hidden',
+      'typed_ui_initial_helper_rule_visible',
+      'typed_ui_helper_edit_applied',
+      'typed_ui_helper_undo',
+      'typed_ui_helper_redo'
     )
 
     if($r.requirements.Count-ne$required.Count){
