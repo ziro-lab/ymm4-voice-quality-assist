@@ -2302,13 +2302,13 @@ internal static class Probe
         Check(
             "forced_boundary_persistence_saved",
             savedText.Contains(
-                ""Remark":"B3_FORCED_BOUNDARY_INPUT"",
+                "\"Remark\":\"B3_FORCED_BOUNDARY_INPUT\"",
                 StringComparison.Ordinal)
             && savedText.Contains(
-                ""BoundaryInputToken":"||"",
+                "\"BoundaryInputToken\":\"||\"",
                 StringComparison.Ordinal)
             && savedText.Contains(
-                ""Serif":"え<w0>ええ"",
+                "\"Serif\":\"え<w0>ええ\"",
                 StringComparison.Ordinal));
 
         File.WriteAllText(
