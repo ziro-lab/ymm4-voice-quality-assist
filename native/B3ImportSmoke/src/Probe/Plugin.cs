@@ -800,6 +800,12 @@ internal static class Probe
                         "Typed UI target effect was unavailable."),
                 manager);
 
+            await RunForcedBoundaryInputLifecycleAsync(
+                timeline,
+                character,
+                parameter,
+                manager);
+
             await RunLegacyMigrationLifecycleAsync(
                 timeline,
                 character,
@@ -968,6 +974,15 @@ internal static class Probe
                 x.Contains(
                     "新しい補助モーラ",
                     StringComparison.Ordinal)));
+
+        Check(
+            "typed_ui_boundary_token_visible",
+            texts.Any(x =>
+                x.Contains(
+                    "強制区切り入力記号",
+                    StringComparison.Ordinal))
+            && effect.BoundaryInputToken
+                == ForcedBoundaryInputToken.Default);
 
         Check(
             "typed_ui_prosody_editor_visible",
@@ -1807,6 +1822,204 @@ internal static class Probe
             _ =>
                 null,
         };
+
+    static async Task RunForcedBoundaryInputLifecycleAsync(
+        Timeline timeline,
+        Character character,
+        IVoiceParameter parameter,
+        UndoRedoManager manager)
+    {
+        var voice =
+            CreateVoice(
+                character,
+                parameter,
+                "え|ええ",
+                "エエエ",
+                "B3_FORCED_BOUNDARY_INPUT");
+
+        Check(
+            "forced_boundary_input_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                960,
+                9));
+
+        var effect =
+            new PronunciationAssistAudioEffect
+            {
+                IsEnabled = true,
+                BoundaryInputToken = "|",
+            };
+
+        Check(
+            "forced_boundary_input_effect_added",
+            PronunciationAssistSettingsStore
+                .TryAdd(
+                    voice,
+                    effect,
+                    out var addError)
+            && addError is null
+            && voice.AudioEffects
+                .Cast<object>()
+                .Any(x =>
+                    ReferenceEquals(
+                        x,
+                        effect)));
+
+        Check(
+            "forced_boundary_token_not_automatic",
+            voice.Serif == "え|ええ"
+            && BoundaryMarkerParser
+                .Parse(
+                    voice.Serif)
+                .ZeroWaitPositions.Count
+                == 0);
+
+        var prepared =
+            ForcedBoundaryEditPlanner
+                .PrepareNormalizeTokens(
+                    [voice]);
+
+        Check(
+            "forced_boundary_normalization_prepared",
+            prepared.IsReady
+            && prepared.Journal is not null
+            && prepared.Journal
+                .ChangedBoundaryCount == 1
+            && voice.Serif == "え|ええ");
+
+        var journal =
+            prepared.Journal
+            ?? throw new InvalidOperationException(
+                "Forced-boundary journal missing.");
+
+        manager.Record();
+
+        var recorded = 0;
+        var undoed = 0;
+        var redoed = 0;
+
+        EventHandler recordedHandler =
+            (_, _) =>
+                recorded++;
+
+        EventHandler undoedHandler =
+            (_, _) =>
+                undoed++;
+
+        EventHandler redoedHandler =
+            (_, _) =>
+                redoed++;
+
+        manager.Recorded +=
+            recordedHandler;
+        manager.Undoed +=
+            undoedHandler;
+        manager.Redoed +=
+            redoedHandler;
+
+        try
+        {
+            var committed =
+                journal.Commit(
+                    target =>
+                        timeline.Items
+                            .Any(x =>
+                                ReferenceEquals(
+                                    x,
+                                    target)));
+
+            Check(
+                "forced_boundary_normalization_committed",
+                committed.IsSuccess
+                && voice.Serif
+                    == "え<w0>ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions
+                    .SequenceEqual(
+                        [1])
+                && effect.BoundaryInputToken
+                    == "|");
+
+            manager.AddCommand(
+                new UndoRedoActionCommand(
+                    journal.UndoOrThrow,
+                    journal.RedoOrThrow));
+
+            manager.Record();
+
+            Check(
+                "forced_boundary_normalization_recorded_once",
+                recorded == 1);
+
+            if (recorded != 1)
+            {
+                throw new InvalidOperationException(
+                    "Forced-boundary normalization did not create exactly one YMM4 undo record.");
+            }
+
+            await manager.UndoAsync();
+
+            Check(
+                "forced_boundary_normalization_undo",
+                undoed == 1
+                && voice.Serif
+                    == "え|ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions.Count
+                    == 0);
+
+            await manager.RedoAsync();
+
+            Check(
+                "forced_boundary_normalization_redo",
+                redoed == 1
+                && voice.Serif
+                    == "え<w0>ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions
+                    .SequenceEqual(
+                        [1]));
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "forced-boundary-input-observation.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        effect.BoundaryInputToken,
+                        voice.Serif,
+                        positions =
+                            BoundaryMarkerParser
+                                .Parse(
+                                    voice.Serif)
+                                .ZeroWaitPositions,
+                        recorded,
+                        undoed,
+                        redoed,
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        finally
+        {
+            manager.Recorded -=
+                recordedHandler;
+            manager.Undoed -=
+                undoedHandler;
+            manager.Redoed -=
+                redoedHandler;
+        }
+    }
 
     static async Task RunLegacyMigrationLifecycleAsync(
         Timeline timeline,
