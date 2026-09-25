@@ -149,6 +149,12 @@ try {
       Get-Content $forcedBoundaryObservation
     }
 
+    $forcedBoundaryReloadObservation=Join-Path $OutputDir 'forced-boundary-save-reload-observation.json'
+    if(Test-Path $forcedBoundaryReloadObservation){
+      Write-Output '--- forced boundary save reload observation ---'
+      Get-Content $forcedBoundaryReloadObservation
+    }
+
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
     if(Test-Path $requestsPath){
       Write-Output '--- fake VOICEVOX requests ---'
@@ -218,7 +224,8 @@ try {
       'forced_boundary_normalization_committed',
       'forced_boundary_normalization_recorded_once',
       'forced_boundary_normalization_undo',
-      'forced_boundary_normalization_redo'
+      'forced_boundary_normalization_redo',
+      'forced_boundary_input_save_reload'
     )
 
     if($r.requirements.Count-ne$required.Count){
