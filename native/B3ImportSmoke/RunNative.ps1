@@ -225,7 +225,9 @@ try {
       'forced_boundary_normalization_recorded_once',
       'forced_boundary_normalization_undo',
       'forced_boundary_normalization_redo',
-      'forced_boundary_input_save_reload'
+      'forced_boundary_persistence_fixture_ready',
+      'forced_boundary_input_save_reload',
+      'forced_boundary_reload_replaces_live_objects'
     )
 
     if($r.requirements.Count-ne$required.Count){
