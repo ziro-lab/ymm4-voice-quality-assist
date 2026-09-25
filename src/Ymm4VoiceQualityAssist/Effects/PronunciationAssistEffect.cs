@@ -12,6 +12,20 @@ public sealed class PronunciationAssistEffect : VideoEffectBase, IPronunciationA
 {
     public override string Label => "発音補助";
 
+    public string BoundaryInputToken
+    {
+        get => field;
+        set
+        {
+            if (ForcedBoundaryInputToken.TryValidate(
+                    value,
+                    out _))
+            {
+                Set(ref field, value);
+            }
+        }
+    } = ForcedBoundaryInputToken.Default;
+
     /// <summary>
     /// Versioned canonical helper-mora rule JSON.
     ///
