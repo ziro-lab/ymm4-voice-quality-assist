@@ -50,6 +50,9 @@ public static class PronunciationAssistSettingsStore
         OwnerReference> Owners =
         new();
 
+    static readonly object OwnerSync =
+        new();
+
     static readonly HashSet<string> StorageCollectionProperties =
         new(StringComparer.Ordinal)
         {
@@ -113,18 +116,21 @@ public static class PronunciationAssistSettingsStore
         ArgumentNullException.ThrowIfNull(
             settings);
 
-        if (Owners.TryGetValue(
-                settings,
-                out var owner))
+        lock (OwnerSync)
         {
-            voice =
-                owner.Voice;
+            if (Owners.TryGetValue(
+                    settings,
+                    out var owner))
+            {
+                voice =
+                    owner.Voice;
 
-            return true;
+                return true;
+            }
+
+            voice = null;
+            return false;
         }
-
-        voice = null;
-        return false;
     }
 
     public static IReadOnlyList<IPronunciationAssistSettings>
@@ -428,13 +434,16 @@ public static class PronunciationAssistSettingsStore
         IPronunciationAssistSettings settings,
         VoiceItem voice)
     {
-        Owners.Remove(
-            settings);
+        lock (OwnerSync)
+        {
+            Owners.Remove(
+                settings);
 
-        Owners.Add(
-            settings,
-            new OwnerReference(
-                voice));
+            Owners.Add(
+                settings,
+                new OwnerReference(
+                    voice));
+        }
     }
 
     sealed class OwnerReference(
