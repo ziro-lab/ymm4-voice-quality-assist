@@ -811,6 +811,10 @@ internal static class Probe
                 character,
                 parameter,
                 manager);
+
+            await RunForcedBoundarySaveReloadAsync(
+                main,
+                timeline);
         }
         finally
         {
@@ -2017,6 +2021,206 @@ internal static class Probe
             manager.Redoed -=
                 redoedHandler;
         }
+    }
+
+    static async Task RunForcedBoundarySaveReloadAsync(
+        object main,
+        Timeline timeline)
+    {
+        const string remark =
+            "B3_FORCED_BOUNDARY_INPUT";
+
+        var voice =
+            timeline.Items
+                .OfType<VoiceItem>()
+                .Single(x =>
+                    string.Equals(
+                        x.Remark,
+                        remark,
+                        StringComparison.Ordinal));
+
+        var effect =
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(
+                    voice)
+                .Single();
+
+        effect.BoundaryInputToken =
+            "||";
+
+        var expectedSerif =
+            voice.Serif;
+
+        var save =
+            PublicMethod(
+                main,
+                "SaveProject",
+                typeof(string));
+
+        var open =
+            PublicMethod(
+                main,
+                "OpenProject",
+                typeof(string));
+
+        var projectA =
+            Path.Combine(
+                output,
+                "phase4-boundary-a.ymmp");
+
+        var projectB =
+            Path.Combine(
+                output,
+                "phase4-boundary-b.ymmp");
+
+        save.Invoke(
+            main,
+            [projectA]);
+
+        await WaitUntil(
+            "phase4 project A save",
+            () =>
+                File.Exists(
+                    projectA)
+                && new FileInfo(
+                    projectA)
+                    .Length > 0,
+            15_000);
+
+        effect.BoundaryInputToken =
+            "｜";
+
+        save.Invoke(
+            main,
+            [projectB]);
+
+        await WaitUntil(
+            "phase4 project B save",
+            () =>
+                File.Exists(
+                    projectB)
+                && new FileInfo(
+                    projectB)
+                    .Length > 0,
+            15_000);
+
+        open.Invoke(
+            main,
+            [projectA]);
+
+        await WaitUntil(
+            "phase4 project A reopen",
+            () =>
+                FindVoiceFromActiveTimeline(
+                    main,
+                    remark)
+                is { } loaded
+                && !ReferenceEquals(
+                    loaded,
+                    voice),
+            20_000);
+
+        var reloaded =
+            FindVoiceFromActiveTimeline(
+                main,
+                remark)
+            ?? throw new InvalidOperationException(
+                "Reloaded forced-boundary VoiceItem was not found.");
+
+        var restored =
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(
+                    reloaded)
+                .SingleOrDefault();
+
+        var parsed =
+            BoundaryMarkerParser.Parse(
+                reloaded.Serif
+                ?? string.Empty);
+
+        Check(
+            "forced_boundary_input_save_reload",
+            restored is not null
+            && restored.BoundaryInputToken
+                == "||"
+            && string.Equals(
+                reloaded.Serif,
+                expectedSerif,
+                StringComparison.Ordinal)
+            && parsed.ZeroWaitPositions
+                .SequenceEqual(
+                    [1]));
+
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "forced-boundary-save-reload-observation.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    projectA,
+                    projectB,
+                    originalReferenceChanged =
+                        !ReferenceEquals(
+                            reloaded,
+                            voice),
+                    reloaded.Serif,
+                    markerPositions =
+                        parsed.ZeroWaitPositions,
+                    boundaryInputToken =
+                        restored
+                            ?.BoundaryInputToken,
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+    }
+
+    static MethodInfo PublicMethod(
+        object target,
+        string name,
+        params Type[] parameterTypes) =>
+        target.GetType()
+            .GetMethod(
+                name,
+                BindingFlags.Instance
+                | BindingFlags.Public,
+                binder: null,
+                parameterTypes,
+                modifiers: null)
+        ?? throw new MissingMethodException(
+            target.GetType()
+                .FullName,
+            name);
+
+    static VoiceItem? FindVoiceFromActiveTimeline(
+        object main,
+        string remark)
+    {
+        var active =
+            main.GetType()
+                .GetProperty(
+                    "ActiveTimelineViewModel",
+                    BindingFlags.Instance
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                ?.GetValue(
+                    main);
+
+        var timeline =
+            active is null
+                ? null
+                : FindTimeline(
+                    active);
+
+        return timeline?.Items
+            .OfType<VoiceItem>()
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.Remark,
+                    remark,
+                    StringComparison.Ordinal));
     }
 
     static async Task RunLegacyMigrationLifecycleAsync(
