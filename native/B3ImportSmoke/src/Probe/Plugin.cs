@@ -1943,11 +1943,9 @@ internal static class Probe
                 && effect.BoundaryInputToken
                     == "|");
 
-            manager.AddCommand(
-                new UndoRedoActionCommand(
-                    journal.UndoOrThrow,
-                    journal.RedoOrThrow));
-
+            // Serif is host-managed. Finalizing the record must be
+            // sufficient; adding a custom command would duplicate YMM4's
+            // own property-change undo command.
             manager.Record();
 
             Check(
