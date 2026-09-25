@@ -20,6 +20,7 @@ public sealed class ForcedBoundaryTextEditorTests
 
     [Theory]
     [InlineData("")]
+    [InlineData(" ")]
     [InlineData("<")]
     [InlineData(">")]
     [InlineData("<w0>")]
@@ -172,6 +173,23 @@ public sealed class ForcedBoundaryTextEditorTests
         Assert.Equal(
             ForcedBoundaryTextEditStatus.NoChanges,
             result.Status);
+    }
+
+    [Fact]
+    public void InsertAtCleanTextPosition_RejectsSurrogateSplit()
+    {
+        var result =
+            ForcedBoundaryTextEditor
+                .InsertAtCleanTextPosition(
+                    "A😀B",
+                    2);
+
+        Assert.Equal(
+            ForcedBoundaryTextEditStatus.InvalidPosition,
+            result.Status);
+
+        Assert.Null(
+            result.UpdatedSerif);
     }
 
     [Theory]
