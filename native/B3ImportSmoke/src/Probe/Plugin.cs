@@ -2077,9 +2077,11 @@ internal static class Probe
                 output,
                 "phase4-boundary-persistence.ymmp");
 
-        save.Invoke(
+        await InvokePublicProjectMethodAsync(
+            save,
             main,
-            [project]);
+            project,
+            "SaveProject");
 
         await WaitUntil(
             "phase4 persistence save",
@@ -2091,9 +2093,36 @@ internal static class Probe
                     .Length > 0,
             15_000);
 
-        open.Invoke(
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "phase4-project-methods.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    save = new
+                    {
+                        save.Name,
+                        returnType =
+                            save.ReturnType.FullName,
+                    },
+                    open = new
+                    {
+                        open.Name,
+                        returnType =
+                            open.ReturnType.FullName,
+                    },
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+
+        await InvokePublicProjectMethodAsync(
+            open,
             main,
-            [project]);
+            project,
+            "OpenProject");
 
         await WaitUntil(
             "phase4 persistence reopen",
@@ -2211,6 +2240,37 @@ internal static class Probe
             ? null
             : FindTimeline(
                 active);
+    }
+
+    static async Task InvokePublicProjectMethodAsync(
+        MethodInfo method,
+        object target,
+        string path,
+        string operation)
+    {
+        object? result;
+
+        try
+        {
+            result =
+                method.Invoke(
+                    target,
+                    [path]);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw new InvalidOperationException(
+                operation
+                + " invocation failed.",
+                ex.InnerException
+                    ?? ex);
+        }
+
+        if (result is Task task)
+        {
+            await task.WaitAsync(
+                TimeSpan.FromSeconds(30));
+        }
     }
 
     static MethodInfo PublicMethod(
