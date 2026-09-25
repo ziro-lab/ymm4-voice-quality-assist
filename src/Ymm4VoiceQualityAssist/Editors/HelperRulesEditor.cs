@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Ymm4VoiceQualityAssist.Core;
 using YukkuriMovieMaker.Commons;
@@ -54,6 +55,10 @@ internal sealed class HelperRulesEditorControl
 
     public HelperRulesEditorControl()
     {
+        AutomationProperties.SetAutomationId(
+            this,
+            "VqaHelperRulesEditor");
+
         root =
             new StackPanel
             {
@@ -548,6 +553,28 @@ internal sealed class HelperRulesEditorControl
                         8),
                 Child = panel,
             };
+
+        if (string.Equals(
+                title,
+                "新しい補助モーラ",
+                StringComparison.Ordinal))
+        {
+            AutomationProperties.SetAutomationId(
+                border,
+                "VqaHelperNewRule");
+            AutomationProperties.SetAutomationId(
+                helperBox,
+                "VqaHelperNewText");
+            AutomationProperties.SetAutomationId(
+                kindBox,
+                "VqaHelperNewKind");
+            AutomationProperties.SetAutomationId(
+                positionBox,
+                "VqaHelperNewPosition");
+            AutomationProperties.SetAutomationId(
+                apply,
+                "VqaHelperNewAdd");
+        }
 
         return new RuleForm(
             border,
