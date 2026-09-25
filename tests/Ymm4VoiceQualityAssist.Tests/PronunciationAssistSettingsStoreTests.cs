@@ -504,4 +504,69 @@ public sealed class PronunciationAssistSettingsStoreTests
                 .EnumerateAudio(legacyOnly));
     }
 
+
+    [Fact]
+    public void Store_BindsCanonicalEffectToOwningVoice()
+    {
+        var voice =
+            new VoiceItem();
+
+        var effect =
+            Assert.IsType<PronunciationAssistAudioEffect>(
+                PronunciationAssistSettingsStore
+                    .CreateCanonical());
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryAdd(
+                voice,
+                effect,
+                out var addError),
+            addError);
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryGetOwner(
+                effect,
+                out var owner));
+
+        Assert.Same(
+            voice,
+            owner);
+    }
+
+    [Fact]
+    public void Enumerate_RebindsReloadedEffectOwner()
+    {
+        var voice =
+            new VoiceItem();
+
+        var effect =
+            new PronunciationAssistAudioEffect();
+
+        // Simulate host-restored collection membership through the same public
+        // property shape without relying on the owner registry.
+        var current =
+            voice.AudioEffects;
+
+        voice.AudioEffects =
+            current.Add(
+                effect);
+
+        var entries =
+            PronunciationAssistSettingsStore
+                .EnumerateEntries(
+                    voice);
+
+        Assert.Single(
+            entries);
+
+        Assert.True(
+            PronunciationAssistSettingsStore.TryGetOwner(
+                effect,
+                out var owner));
+
+        Assert.Same(
+            voice,
+            owner);
+    }
+
 }
