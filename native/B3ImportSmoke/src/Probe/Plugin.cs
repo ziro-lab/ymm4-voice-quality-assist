@@ -2025,31 +2025,10 @@ internal static class Probe
 
     static async Task RunForcedBoundarySaveReloadAsync(
         object main,
-        Timeline timeline)
+        Timeline previousTimeline)
     {
         const string remark =
-            "B3_FORCED_BOUNDARY_INPUT";
-
-        var voice =
-            timeline.Items
-                .OfType<VoiceItem>()
-                .Single(x =>
-                    string.Equals(
-                        x.Remark,
-                        remark,
-                        StringComparison.Ordinal));
-
-        var effect =
-            PronunciationAssistSettingsStore
-                .EnumerateAudio(
-                    voice)
-                .Single();
-
-        effect.BoundaryInputToken =
-            "||";
-
-        var expectedSerif =
-            voice.Serif;
+            "B3_FORCED_BOUNDARY_PERSISTENCE";
 
         var save =
             PublicMethod(
@@ -2062,6 +2041,84 @@ internal static class Probe
                 main,
                 "OpenProject",
                 typeof(string));
+
+        // Persist the completed B3 project first so creating a clean project
+        // cannot trigger an unsaved-changes prompt.
+        var prePersistenceProject =
+            Path.Combine(
+                output,
+                "phase4-before-persistence.ymmp");
+
+        save.Invoke(
+            main,
+            [prePersistenceProject]);
+
+        await WaitUntil(
+            "phase4 pre-persistence save",
+            () =>
+                File.Exists(
+                    prePersistenceProject)
+                && new FileInfo(
+                    prePersistenceProject)
+                    .Length > 0,
+            15_000);
+
+        var create =
+            PublicMethod(
+                main,
+                "CreateProject");
+
+        create.Invoke(
+            main,
+            null);
+
+        await WaitUntil(
+            "phase4 clean project creation",
+            () =>
+                FindActiveTimeline(
+                    main)
+                is { } active
+                && !ReferenceEquals(
+                    active,
+                    previousTimeline),
+            15_000);
+
+        var timeline =
+            FindActiveTimeline(
+                main)
+            ?? throw new InvalidOperationException(
+                "Clean persistence Timeline was not created.");
+
+        var voice =
+            new VoiceItem
+            {
+                Serif = "A<w0>B",
+                Hatsuon = "AB",
+                Remark = remark,
+            };
+
+        Check(
+            "forced_boundary_persistence_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                0,
+                0));
+
+        var effect =
+            new PronunciationAssistAudioEffect
+            {
+                IsEnabled = true,
+                BoundaryInputToken = "||",
+            };
+
+        Check(
+            "forced_boundary_persistence_effect_added",
+            PronunciationAssistSettingsStore
+                .TryAdd(
+                    voice,
+                    effect,
+                    out var addError)
+            && addError is null);
 
         var projectA =
             Path.Combine(
@@ -2125,7 +2182,7 @@ internal static class Probe
                 main,
                 remark)
             ?? throw new InvalidOperationException(
-                "Reloaded forced-boundary VoiceItem was not found.");
+                "Reloaded forced-boundary persistence VoiceItem was not found.");
 
         var restored =
             PronunciationAssistSettingsStore
@@ -2145,7 +2202,7 @@ internal static class Probe
                 == "||"
             && string.Equals(
                 reloaded.Serif,
-                expectedSerif,
+                "A<w0>B",
                 StringComparison.Ordinal)
             && parsed.ZeroWaitPositions
                 .SequenceEqual(
@@ -2175,6 +2232,25 @@ internal static class Probe
                 {
                     WriteIndented = true,
                 }));
+    }
+
+    static Timeline? FindActiveTimeline(
+        object main)
+    {
+        var active =
+            main.GetType()
+                .GetProperty(
+                    "ActiveTimelineViewModel",
+                    BindingFlags.Instance
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                ?.GetValue(
+                    main);
+
+        return active is null
+            ? null
+            : FindTimeline(
+                active);
     }
 
     static MethodInfo PublicMethod(
