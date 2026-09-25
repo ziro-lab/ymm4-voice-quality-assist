@@ -149,10 +149,10 @@ try {
       Get-Content $forcedBoundaryObservation
     }
 
-    $forcedBoundaryReloadObservation=Join-Path $OutputDir 'forced-boundary-save-reload-observation.json'
-    if(Test-Path $forcedBoundaryReloadObservation){
-      Write-Output '--- forced boundary save reload observation ---'
-      Get-Content $forcedBoundaryReloadObservation
+    $forcedBoundarySaveObservation=Join-Path $OutputDir 'forced-boundary-save-observation.json'
+    if(Test-Path $forcedBoundarySaveObservation){
+      Write-Output '--- forced boundary save observation ---'
+      Get-Content $forcedBoundarySaveObservation
     }
 
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
@@ -226,8 +226,7 @@ try {
       'forced_boundary_normalization_undo',
       'forced_boundary_normalization_redo',
       'forced_boundary_persistence_fixture_ready',
-      'forced_boundary_input_save_reload',
-      'forced_boundary_reload_replaces_live_objects'
+      'forced_boundary_persistence_saved'
     )
 
     if($r.requirements.Count-ne$required.Count){
@@ -298,7 +297,103 @@ try {
       Join-Path $OutputDir 'e2e.json'
     )
 
+    $project=Join-Path $OutputDir 'phase4-boundary-persistence.ymmp'
+    if(-not(Test-Path $project)){
+      throw 'Phase 4 persistence project missing'
+    }
+
+    # End the full B3 host before proving real restart/reload persistence.
+    if(-not$process.HasExited){
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+    }
+
+    $reloadResult=Join-Path $OutputDir 'reload-result.json'
+    Remove-Item $reloadResult -Force -ErrorAction SilentlyContinue
+
+    $env:VQA_B3_RELOAD_PROJECT=$project
+
+    $projectArg='"' + $project + '"'
+    $reloadProcess=Start-Process (
+      Join-Path $Ymm4Dir 'YukkuriMovieMaker.exe'
+    ) -ArgumentList $projectArg -WorkingDirectory $Ymm4Dir -PassThru
+
+    try {
+      $reloadLimit=[DateTime]::UtcNow.AddSeconds(90)
+
+      while(
+        [DateTime]::UtcNow-lt$reloadLimit -and
+        -not$reloadProcess.HasExited -and
+        -not(Test-Path $reloadResult)
+      ){
+        foreach($w in (Get-VqaB3Windows)){
+          "$([DateTime]::UtcNow.ToString('O')) reload-title=$($w.Title)" |
+            Add-Content (Join-Path $OutputDir 'host-windows.txt')
+
+          if($w.Title -like '*Check for updates*' -or
+             $w.Title -like '*About YukkuriMovieMaker*'){
+            [void][VqaB3Win32]::PostMessage(
+              $w.Handle,
+              0x0010,
+              [IntPtr]::Zero,
+              [IntPtr]::Zero
+            )
+          }
+          elseif($w.Title -eq 'Confirm'){
+            [void][VqaB3Win32]::PostMessage(
+              $w.Handle,
+              0x0100,
+              [IntPtr]0x0D,
+              [IntPtr]::Zero
+            )
+            [void][VqaB3Win32]::PostMessage(
+              $w.Handle,
+              0x0101,
+              [IntPtr]0x0D,
+              [IntPtr]::Zero
+            )
+          }
+        }
+
+        Start-Sleep -Milliseconds 350
+      }
+
+      if(-not(Test-Path $reloadResult)){
+        throw 'No Phase 4 reload result'
+      }
+
+      $reload=Get-Content -Raw $reloadResult|ConvertFrom-Json
+
+      Write-Output '--- forced boundary restart/reload result ---'
+      Get-Content $reloadResult
+
+      $reloadRejected=(
+        $reload.schema-ne'vqa.b3.forced-boundary-reload.v1' -or
+        $reload.status-ne'PASS_B3_FORCED_BOUNDARY_RELOAD' -or
+        $reload.host-ne'4.56.1.0 Lite' -or
+        $reload.sourceHead-ne$env:GITHUB_SHA -or
+        $null-ne$reload.error -or
+        $reload.serif-ne'え<w0>ええ' -or
+        $reload.boundaryInputToken-ne'||' -or
+        $reload.effectEnabled-cne$false -or
+        $reload.markerPositions.Count-ne1 -or
+        [int]$reload.markerPositions[0]-ne1
+      )
+
+      if($reloadRejected){
+        throw 'Phase 4 restart/reload result rejected'
+      }
+    }
+    finally {
+      if(-not$reloadProcess.HasExited){
+        Stop-Process -Id $reloadProcess.Id -Force -ErrorAction SilentlyContinue
+      }
+
+      Remove-Item Env:VQA_B3_RELOAD_PROJECT -ErrorAction SilentlyContinue
+    }
+
     Write-Output 'PASS_B3_IMPORT_PRODUCT_NATIVE_SMOKE_E2E'
+    Write-Output 'PASS_B3_FORCED_BOUNDARY_RESTART_RELOAD_E2E'
   }
   finally {
     if(-not$process.HasExited){
@@ -313,4 +408,5 @@ finally {
 
   Remove-Item Env:VQA_B3_NATIVE_OUTPUT -ErrorAction SilentlyContinue
   Remove-Item Env:VQA_B3_FAKE_VOICEVOX_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:VQA_B3_RELOAD_PROJECT -ErrorAction SilentlyContinue
 }
