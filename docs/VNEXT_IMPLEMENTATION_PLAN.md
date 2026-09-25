@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **PHASE 0–2 GREEN / PHASE 3 NEXT**
+Status: **PHASE 0–3 GREEN / PHASE 4 NEXT**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -198,6 +198,23 @@ If BLOCKED:
 The runtime should stop directly naming `JimakuVideoEffects` outside the adapter.
 
 ## Phase 3 — Detail settings UI
+
+Status: **GREEN**
+
+Accepted product code source: `fb5eb5d44df28c980c2fbf904ec2cf429caf49d5` (PR #14).
+
+Acceptance:
+
+- unit: 173/173 PASS;
+- A1/A2/A3 native regressions: GREEN;
+- B3 native typed-UI lifecycle: GREEN;
+- real Item Editor selects the canonical Audio Effect;
+- helper editor and prosody editor are visible;
+- raw `HelperRulesJson` is not exposed;
+- helper add creates one normal YMM4 Undo record;
+- Undo restores the exact previous helper JSON;
+- Redo restores the edited helper state;
+- helper editor resolves the owning VoiceItem through the non-persistent Store owner registry and rebuilds semantic anchors from current clean Serif.
 
 Expose typed settings, not raw serialization.
 
