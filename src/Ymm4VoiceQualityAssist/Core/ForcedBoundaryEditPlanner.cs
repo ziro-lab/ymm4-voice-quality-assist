@@ -324,7 +324,7 @@ public sealed class ForcedBoundarySerifJournal
         }
     }
 
-    public void UndoOrThrow()
+    public void RollbackOrThrow()
     {
         if (!committed)
         {
@@ -335,20 +335,6 @@ public sealed class ForcedBoundarySerifJournal
         ApplyOrThrow(
             x => x.After,
             x => x.Before,
-            null);
-    }
-
-    public void RedoOrThrow()
-    {
-        if (!committed)
-        {
-            throw new InvalidOperationException(
-                "強制区切り編集はまだ適用されていません。");
-        }
-
-        ApplyOrThrow(
-            x => x.Before,
-            x => x.After,
             null);
     }
 
