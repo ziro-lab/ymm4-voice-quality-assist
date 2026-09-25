@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **vNext Phase 1–2 GREEN / Phase 3 typed settings UI next**  
+> Status: **vNext Phase 1–3 GREEN / Phase 4 forced-boundary input UX next**  
 > 現時点では配布版プラグインはありません。
 
 ## vNext 現在地
@@ -18,7 +18,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 - Lab PR #142で `VoiceItem.AudioEffects` のpublic列挙・追加/削除・設定UI・通知・pass-through・Undo/Redo・save/reloadがGREENになりました。
 - Phase 2はGREENです。`PronunciationAssistSettingsStore` を導入し、**新規設定はAudio Effect、旧候補版の字幕Effectはdual-read + 明示migration**へ移行しました。実YMM4でmigrationのCommit / Undo / Redoまで確認済みです。
 - Harmony/private collection traversalはこの移行に不要です。
-- 次はPhase 3として、Audio Effect内のtyped settings UIを整え、raw `HelperRulesJson` をユーザー操作から隠します。
+- Phase 3もGREENです。Audio Effect内にtyped helper editorと抑揚selectorを実装し、raw `HelperRulesJson` をユーザー操作から隠しました。実YMM4でhelper追加→Undo→Redoまで確認済みです。
+- 次はPhase 4として、ユーザー向け強制区切り入力を安全にcanonical `<w0>`へ変換する編集UXを実装します。
 
 正本:
 - `docs/VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md`
