@@ -11,7 +11,7 @@ public static class ForcedBoundaryInputToken
         string? token,
         out string? error)
     {
-        if (string.IsNullOrEmpty(token))
+        if (string.IsNullOrWhiteSpace(token))
         {
             error =
                 "強制区切り入力記号は空にできません。";
@@ -257,6 +257,18 @@ public static class ForcedBoundaryTextEditor
                 null,
                 0,
                 $"本文位置は1〜{Math.Max(1, parsed.CleanText.Length - 1)}の範囲で指定してください。");
+        }
+
+        if (char.IsHighSurrogate(
+                parsed.CleanText[position - 1])
+            && char.IsLowSurrogate(
+                parsed.CleanText[position]))
+        {
+            return new(
+                ForcedBoundaryTextEditStatus.InvalidPosition,
+                null,
+                0,
+                "サロゲートペアの途中には強制区切りを挿入できません。");
         }
 
         if (parsed.ZeroWaitPositions.Contains(
