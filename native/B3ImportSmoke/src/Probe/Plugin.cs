@@ -2107,7 +2107,9 @@ internal static class Probe
         var effect =
             new PronunciationAssistAudioEffect
             {
-                IsEnabled = true,
+                // Persistence proof only: keep runtime synthesis out of this
+                // save/reload scenario so it measures serialization alone.
+                IsEnabled = false,
                 BoundaryInputToken = "||",
             };
 
