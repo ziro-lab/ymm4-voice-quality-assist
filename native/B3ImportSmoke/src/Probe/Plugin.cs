@@ -1361,8 +1361,72 @@ internal static class Probe
         foreach (Window window
             in Application.Current.Windows)
         {
+            var visual =
+                EnumerateVisual(window)
+                    .ToArray();
+
+            // Real YMM4's AudioEffectSelector may expose wrapper items in the
+            // ListBox.Items collection while the realized ListBoxItem itself
+            // carries the effect as DataContext. Prefer the realized host shape.
+            foreach (var container
+                in visual
+                    .OfType<ListBoxItem>()
+                    .Where(x =>
+                        ReferenceEquals(
+                            x.DataContext,
+                            effect)))
+            {
+                try
+                {
+                    container.IsSelected =
+                        true;
+
+                    container.Focus();
+                    container.BringIntoView();
+                    container.UpdateLayout();
+
+                    var parent =
+                        FindVisualAncestor<ListBox>(
+                            container);
+
+                    if (parent is not null)
+                    {
+                        try
+                        {
+                            var item =
+                                parent.ItemContainerGenerator
+                                    .ItemFromContainer(
+                                        container);
+
+                            if (item is not null
+                                && item
+                                    != DependencyProperty.UnsetValue)
+                            {
+                                parent.SelectedItem =
+                                    item;
+                            }
+
+                            parent.UpdateLayout();
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    selected |=
+                        container.IsSelected;
+                }
+                catch
+                {
+                }
+            }
+
+            if (selected)
+                continue;
+
+            // Fallback for hosts where the effect is the item directly.
             foreach (var listBox
-                in EnumerateVisual(window)
+                in visual
                     .OfType<ListBox>())
             {
                 try
@@ -1373,6 +1437,10 @@ internal static class Probe
                             .FirstOrDefault(x =>
                                 ReferenceEquals(
                                     x,
+                                    effect)
+                                || ReferenceEquals(
+                                    (x as FrameworkElement)
+                                        ?.DataContext,
                                     effect));
 
                     if (target is null)
@@ -1395,12 +1463,12 @@ internal static class Probe
                         container.BringIntoView();
                         container.UpdateLayout();
 
-                        selected =
+                        selected |=
                             container.IsSelected;
                     }
                     else
                     {
-                        selected =
+                        selected |=
                             ReferenceEquals(
                                 listBox.SelectedItem,
                                 target);
@@ -1413,6 +1481,33 @@ internal static class Probe
         }
 
         return selected;
+    }
+
+    static T? FindVisualAncestor<T>(
+        DependencyObject start)
+        where T : DependencyObject
+    {
+        DependencyObject? current =
+            start;
+
+        while (current is not null)
+        {
+            if (current is T typed)
+                return typed;
+
+            try
+            {
+                current =
+                    VisualTreeHelper.GetParent(
+                        current);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     static IEnumerable<DependencyObject>
