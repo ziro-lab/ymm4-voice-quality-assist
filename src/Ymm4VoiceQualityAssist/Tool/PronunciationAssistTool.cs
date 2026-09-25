@@ -943,11 +943,10 @@ public sealed class PronunciationAssistToolViewModel :
                             : $"{committed.FailedExportRef}: {committed.Message}");
             }
 
-            undoRedoManager.AddCommand(
-                new UndoRedoActionCommand(
-                    journal.UndoOrThrow,
-                    journal.RedoOrThrow));
-
+            // VoiceItem.Serif is a normal YMM4-managed property.
+            // The host creates its own property-change undo commands while
+            // the current record is open, so adding a second custom command
+            // would duplicate the same Serif edit.
             undoRedoManager.Record();
 
             LastReviewExportSession =
