@@ -47,13 +47,23 @@ internal static class Probe
             Environment.GetEnvironmentVariable(
                 "VQA_B3_NATIVE_OUTPUT");
 
+        var reloadProject =
+            Environment.GetEnvironmentVariable(
+                "VQA_B3_RELOAD_PROJECT");
+
         var url =
             Environment.GetEnvironmentVariable(
                 "VQA_B3_FAKE_VOICEVOX_URL");
 
         if (scheduled
-            || string.IsNullOrWhiteSpace(dir)
-            || string.IsNullOrWhiteSpace(url))
+            || string.IsNullOrWhiteSpace(dir))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                reloadProject)
+            && string.IsNullOrWhiteSpace(url))
         {
             return;
         }
@@ -65,10 +75,212 @@ internal static class Probe
         Directory.CreateDirectory(
             output);
 
+        if (!string.IsNullOrWhiteSpace(
+                reloadProject))
+        {
+            Application.Current.Dispatcher.BeginInvoke(
+                new Action(
+                    () => StartReload(
+                        Path.GetFullPath(
+                            reloadProject))),
+                DispatcherPriority.ApplicationIdle);
+
+            return;
+        }
+
         Application.Current.Dispatcher.BeginInvoke(
             new Action(
-                () => Start(url)),
+                () => Start(url!)),
             DispatcherPriority.ApplicationIdle);
+    }
+
+    static void StartReload(
+        string project)
+    {
+        var ticks = 0;
+
+        var timer =
+            new DispatcherTimer(
+                DispatcherPriority.ApplicationIdle)
+            {
+                Interval =
+                    TimeSpan.FromMilliseconds(300),
+            };
+
+        timer.Tick +=
+            (_, _) =>
+            {
+                try
+                {
+                    ticks++;
+
+                    var main =
+                        Application.Current.Windows
+                            .Cast<Window>()
+                            .Select(x =>
+                                x.DataContext)
+                            .FirstOrDefault(x =>
+                                x?.GetType().FullName
+                                == "YukkuriMovieMaker.ViewModels.MainViewModel");
+
+                    if (main is null)
+                    {
+                        if (ticks > 240)
+                        {
+                            throw new TimeoutException(
+                                "MainViewModel was not created in reload mode.");
+                        }
+
+                        return;
+                    }
+
+                    const string remark =
+                        "B3_FORCED_BOUNDARY_INPUT";
+
+                    var voice =
+                        FindVoiceFromActiveTimeline(
+                            main,
+                            remark);
+
+                    if (voice is null)
+                    {
+                        if (ticks > 240)
+                        {
+                            throw new TimeoutException(
+                                "Saved Phase 4 VoiceItem was not loaded from the command-line project.");
+                        }
+
+                        return;
+                    }
+
+                    timer.Stop();
+
+                    WriteReloadResult(
+                        project,
+                        voice,
+                        null);
+                }
+                catch (Exception ex)
+                {
+                    timer.Stop();
+
+                    WriteReloadFailure(
+                        project,
+                        ex);
+                }
+            };
+
+        timer.Start();
+    }
+
+    static void WriteReloadResult(
+        string project,
+        VoiceItem voice,
+        string? error)
+    {
+        var restored =
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(
+                    voice)
+                .SingleOrDefault();
+
+        var parsed =
+            BoundaryMarkerParser.Parse(
+                voice.Serif
+                ?? string.Empty);
+
+        var passed =
+            restored is not null
+            && restored.BoundaryInputToken
+                == "||"
+            && !restored.IsEnabled
+            && string.Equals(
+                voice.Serif,
+                "え<w0>ええ",
+                StringComparison.Ordinal)
+            && parsed.ZeroWaitPositions
+                .SequenceEqual(
+                    [1]);
+
+        if (!passed)
+        {
+            error ??=
+                "Reloaded Phase 4 state did not match the saved marker/token/effect state.";
+        }
+
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "reload-result.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    schema =
+                        "vqa.b3.forced-boundary-reload.v1",
+                    status =
+                        passed
+                            ? "PASS_B3_FORCED_BOUNDARY_RELOAD"
+                            : "FAIL_B3_FORCED_BOUNDARY_RELOAD",
+                    host =
+                        "4.56.1.0 Lite",
+                    sourceHead =
+                        Environment.GetEnvironmentVariable(
+                            "GITHUB_SHA"),
+                    project,
+                    serif =
+                        voice.Serif,
+                    markerPositions =
+                        parsed.ZeroWaitPositions,
+                    boundaryInputToken =
+                        restored
+                            ?.BoundaryInputToken,
+                    effectEnabled =
+                        restored
+                            ?.IsEnabled,
+                    error,
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+    }
+
+    static void WriteReloadFailure(
+        string project,
+        Exception ex)
+    {
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "reload-result.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    schema =
+                        "vqa.b3.forced-boundary-reload.v1",
+                    status =
+                        "FAIL_B3_FORCED_BOUNDARY_RELOAD",
+                    host =
+                        "4.56.1.0 Lite",
+                    sourceHead =
+                        Environment.GetEnvironmentVariable(
+                            "GITHUB_SHA"),
+                    project,
+                    serif =
+                        (string?)null,
+                    markerPositions =
+                        Array.Empty<int>(),
+                    boundaryInputToken =
+                        (string?)null,
+                    effectEnabled =
+                        (bool?)null,
+                    error =
+                        ex.ToString(),
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
     }
 
     static void Start(
@@ -813,9 +1025,8 @@ internal static class Probe
                 parameter,
                 manager);
 
-            await RunForcedBoundarySaveReloadAsync(
+            await RunForcedBoundaryPersistenceSaveAsync(
                 main,
-                timeline,
                 boundaryFixture);
         }
         finally
@@ -2030,9 +2241,8 @@ internal static class Probe
             effect);
     }
 
-    static async Task RunForcedBoundarySaveReloadAsync(
+    static async Task RunForcedBoundaryPersistenceSaveAsync(
         object main,
-        Timeline previousTimeline,
         ForcedBoundaryPersistenceFixture fixture)
     {
         const string remark =
@@ -2044,14 +2254,6 @@ internal static class Probe
                 "SaveProject",
                 typeof(string));
 
-        var open =
-            PublicMethod(
-                main,
-                "OpenProject",
-                typeof(string));
-
-        // Reuse the already-proven Phase 4 VoiceItem instead of creating a
-        // second project/fixture. Persistence needs only one save + one reopen.
         fixture.Effect.IsEnabled =
             false;
 
@@ -2093,125 +2295,41 @@ internal static class Probe
                     .Length > 0,
             15_000);
 
-        File.WriteAllText(
-            Path.Combine(
-                output,
-                "phase4-project-methods.json"),
-            JsonSerializer.Serialize(
-                new
-                {
-                    save = new
-                    {
-                        save.Name,
-                        returnType =
-                            save.ReturnType.FullName,
-                    },
-                    open = new
-                    {
-                        open.Name,
-                        returnType =
-                            open.ReturnType.FullName,
-                    },
-                },
-                new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                }));
-
-        await InvokePublicProjectMethodAsync(
-            open,
-            main,
-            project,
-            "OpenProject");
-
-        await WaitUntil(
-            "phase4 persistence reopen",
-            () =>
-            {
-                var loaded =
-                    FindVoiceFromActiveTimeline(
-                        main,
-                        remark);
-
-                return loaded is not null
-                    && !ReferenceEquals(
-                        loaded,
-                        fixture.Voice);
-            },
-            30_000);
-
-        var reloaded =
-            FindVoiceFromActiveTimeline(
-                main,
-                remark)
-            ?? throw new InvalidOperationException(
-                "Reloaded forced-boundary VoiceItem was not found.");
-
-        var restored =
-            PronunciationAssistSettingsStore
-                .EnumerateAudio(
-                    reloaded)
-                .SingleOrDefault();
-
-        var parsed =
-            BoundaryMarkerParser.Parse(
-                reloaded.Serif
-                ?? string.Empty);
+        var savedText =
+            File.ReadAllText(
+                project);
 
         Check(
-            "forced_boundary_input_save_reload",
-            restored is not null
-            && restored.BoundaryInputToken
-                == "||"
-            && !restored.IsEnabled
-            && string.Equals(
-                reloaded.Serif,
-                "え<w0>ええ",
+            "forced_boundary_persistence_saved",
+            savedText.Contains(
+                ""Remark":"B3_FORCED_BOUNDARY_INPUT"",
                 StringComparison.Ordinal)
-            && parsed.ZeroWaitPositions
-                .SequenceEqual(
-                    [1]));
-
-        Check(
-            "forced_boundary_reload_replaces_live_objects",
-            !ReferenceEquals(
-                reloaded,
-                fixture.Voice)
-            && FindActiveTimeline(
-                main)
-                is { } currentTimeline
-            && !ReferenceEquals(
-                currentTimeline,
-                previousTimeline));
+            && savedText.Contains(
+                ""BoundaryInputToken":"||"",
+                StringComparison.Ordinal)
+            && savedText.Contains(
+                ""Serif":"え<w0>ええ"",
+                StringComparison.Ordinal));
 
         File.WriteAllText(
             Path.Combine(
                 output,
-                "forced-boundary-save-reload-observation.json"),
+                "forced-boundary-save-observation.json"),
             JsonSerializer.Serialize(
                 new
                 {
                     project,
-                    voiceReferenceChanged =
-                        !ReferenceEquals(
-                            reloaded,
-                            fixture.Voice),
-                    timelineReferenceChanged =
-                        FindActiveTimeline(
-                            main)
-                        is { } observedTimeline
-                        && !ReferenceEquals(
-                            observedTimeline,
-                            previousTimeline),
-                    reloaded.Serif,
-                    markerPositions =
-                        parsed.ZeroWaitPositions,
+                    fileLength =
+                        new FileInfo(
+                            project)
+                            .Length,
+                    fixture.Voice.Serif,
                     boundaryInputToken =
-                        restored
-                            ?.BoundaryInputToken,
-                    restoredEnabled =
-                        restored
-                            ?.IsEnabled,
+                        fixture.Effect
+                            .BoundaryInputToken,
+                    effectEnabled =
+                        fixture.Effect
+                            .IsEnabled,
                 },
                 new JsonSerializerOptions
                 {
@@ -2222,25 +2340,6 @@ internal static class Probe
     sealed record ForcedBoundaryPersistenceFixture(
         VoiceItem Voice,
         PronunciationAssistAudioEffect Effect);
-
-    static Timeline? FindActiveTimeline(
-        object main)
-    {
-        var active =
-            main.GetType()
-                .GetProperty(
-                    "ActiveTimelineViewModel",
-                    BindingFlags.Instance
-                    | BindingFlags.Public
-                    | BindingFlags.NonPublic)
-                ?.GetValue(
-                    main);
-
-        return active is null
-            ? null
-            : FindTimeline(
-                active);
-    }
 
     static async Task InvokePublicProjectMethodAsync(
         MethodInfo method,
