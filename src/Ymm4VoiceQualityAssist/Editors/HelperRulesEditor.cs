@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using Ymm4VoiceQualityAssist.Core;
+using Ymm4VoiceQualityAssist.Effects;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Project.Items;
 
@@ -161,8 +162,11 @@ internal sealed class HelperRulesEditorControl
             return;
         }
 
-        if (properties[0].Item
-            is not VoiceItem voice)
+        var voice =
+            ResolveVoiceItem(
+                properties[0]);
+
+        if (voice is null)
         {
             AddMessage(
                 "親VoiceItemを取得できないため、補助モーラ設定を編集できません。");
@@ -244,6 +248,28 @@ internal sealed class HelperRulesEditorControl
         root.Children.Add(
             CreateNewRuleEditor(
                 cleanSerif));
+    }
+
+    static VoiceItem? ResolveVoiceItem(
+        ItemProperty property)
+    {
+        if (property.Item
+            is VoiceItem direct)
+        {
+            return direct;
+        }
+
+        if (property.PropertyOwner
+                is IPronunciationAssistSettings settings
+            && PronunciationAssistSettingsStore
+                .TryGetOwner(
+                    settings,
+                    out var owner))
+        {
+            return owner;
+        }
+
+        return null;
     }
 
     FrameworkElement CreateExistingRuleEditor(
