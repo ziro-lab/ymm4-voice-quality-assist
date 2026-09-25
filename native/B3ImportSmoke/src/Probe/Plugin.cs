@@ -858,9 +858,17 @@ internal static class Probe
 
         await Task.Delay(300);
 
+        WriteTypedUiDiagnostic(
+            "before-effect-selection",
+            effect);
+
         var effectSelected =
             SelectAudioEffectInEditor(
                 effect);
+
+        WriteTypedUiDiagnostic(
+            "after-effect-selection",
+            effect);
 
         await Task.Delay(500);
 
@@ -1379,6 +1387,198 @@ internal static class Probe
                     }
                 }
             }
+        }
+    }
+
+    static void WriteTypedUiDiagnostic(
+        string phase,
+        PronunciationAssistAudioEffect effect)
+    {
+        try
+        {
+            var windows =
+                Application.Current.Windows
+                    .Cast<Window>()
+                    .ToArray();
+
+            var visual =
+                windows
+                    .SelectMany(
+                        EnumerateVisual)
+                    .OfType<FrameworkElement>()
+                    .ToArray();
+
+            object DescribeElement(
+                FrameworkElement element) =>
+                new
+                {
+                    type =
+                        element.GetType()
+                            .FullName,
+                    element.Name,
+                    visible =
+                        element.IsVisible,
+                    text =
+                        GetText(element),
+                    dataContextType =
+                        element.DataContext
+                            ?.GetType()
+                            .FullName,
+                    dataContextIsTarget =
+                        ReferenceEquals(
+                            element.DataContext,
+                            effect),
+                    automationId =
+                        AutomationProperties
+                            .GetAutomationId(
+                                element),
+                    element.ActualWidth,
+                    element.ActualHeight,
+                };
+
+            var listBoxes =
+                visual
+                    .OfType<ListBox>()
+                    .Select(list =>
+                        new
+                        {
+                            element =
+                                DescribeElement(
+                                    list),
+                            items =
+                                list.Items
+                                    .Cast<object>()
+                                    .Select((item, index) =>
+                                    {
+                                        var container =
+                                            list.ItemContainerGenerator
+                                                .ContainerFromIndex(
+                                                    index)
+                                            as ListBoxItem;
+
+                                        return new
+                                        {
+                                            index,
+                                            itemType =
+                                                item.GetType()
+                                                    .FullName,
+                                            itemIsTarget =
+                                                ReferenceEquals(
+                                                    item,
+                                                    effect),
+                                            itemDataContextType =
+                                                (item as FrameworkElement)
+                                                    ?.DataContext
+                                                    ?.GetType()
+                                                    .FullName,
+                                            itemDataContextIsTarget =
+                                                ReferenceEquals(
+                                                    (item as FrameworkElement)
+                                                        ?.DataContext,
+                                                    effect),
+                                            container =
+                                                container is null
+                                                    ? null
+                                                    : DescribeElement(
+                                                        container),
+                                        };
+                                    })
+                                    .ToArray(),
+                        })
+                    .ToArray();
+
+            var targetDataContexts =
+                visual
+                    .Where(x =>
+                        ReferenceEquals(
+                            x.DataContext,
+                            effect))
+                    .Select(
+                        DescribeElement)
+                    .ToArray();
+
+            var relevant =
+                visual
+                    .Where(x =>
+                    {
+                        var text =
+                            GetText(x)
+                            ?? string.Empty;
+
+                        var type =
+                            x.GetType()
+                                .FullName
+                            ?? string.Empty;
+
+                        var dc =
+                            x.DataContext
+                                ?.GetType()
+                                .FullName
+                            ?? string.Empty;
+
+                        return text.Contains(
+                                "発音補助",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "音声エフェクト",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "Audio",
+                                StringComparison.OrdinalIgnoreCase)
+                            || text.Contains(
+                                "補助モーラ",
+                                StringComparison.Ordinal)
+                            || text.Contains(
+                                "抑揚",
+                                StringComparison.Ordinal)
+                            || type.Contains(
+                                "AudioEffect",
+                                StringComparison.OrdinalIgnoreCase)
+                            || dc.Contains(
+                                "AudioEffect",
+                                StringComparison.OrdinalIgnoreCase)
+                            || ReferenceEquals(
+                                x.DataContext,
+                                effect);
+                    })
+                    .Take(250)
+                    .Select(
+                        DescribeElement)
+                    .ToArray();
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"typed-ui-{phase}.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        phase,
+                        effectType =
+                            effect.GetType()
+                                .FullName,
+                        audioEffectCount =
+                            Application.Current.Windows
+                                .Cast<Window>()
+                                .Count(),
+                        targetDataContextCount =
+                            targetDataContexts.Length,
+                        listBoxes,
+                        targetDataContexts,
+                        relevant,
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        catch (Exception ex)
+        {
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    $"typed-ui-{phase}-diagnostic-error.txt"),
+                ex.ToString());
         }
     }
 
