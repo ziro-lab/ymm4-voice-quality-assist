@@ -346,6 +346,55 @@ public sealed class ReviewIdentityTests
     }
 
     [Fact]
+    public void VoiceItemAdapter_BoundaryInputToken_IsEditingOnly()
+    {
+        var voice =
+            new VoiceItem
+            {
+                CharacterName = "小夜",
+                Serif = "ABC",
+                Hatsuon = "エービーシー",
+            };
+
+        var effect =
+            new PronunciationAssistEffect
+            {
+                IsEnabled = true,
+                BoundaryInputToken = "|",
+                Prosody = ProsodyGesture.Hold,
+            };
+
+        AppendEffect(
+            voice,
+            effect);
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var before,
+                out var beforeError),
+            beforeError);
+
+        effect.BoundaryInputToken =
+            "｜";
+
+        Assert.True(
+            SourceFingerprint.TryCreate(
+                voice,
+                out var after,
+                out var afterError),
+            afterError);
+
+        Assert.Equal(
+            before!.Fingerprint,
+            after!.Fingerprint);
+
+        Assert.Equal(
+            before.CanonicalJson,
+            after.CanonicalJson);
+    }
+
+    [Fact]
     public void VoiceItemAdapter_MalformedEnabledHelperJsonFailsClosed()
     {
         var voice = new VoiceItem
