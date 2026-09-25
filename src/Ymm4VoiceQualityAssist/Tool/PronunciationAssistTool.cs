@@ -943,10 +943,11 @@ public sealed class PronunciationAssistToolViewModel :
                             : $"{committed.FailedExportRef}: {committed.Message}");
             }
 
-            // VoiceItem.Serif is a normal YMM4-managed property.
-            // The host creates its own property-change undo commands while
-            // the current record is open, so adding a second custom command
-            // would duplicate the same Serif edit.
+            undoRedoManager.AddCommand(
+                new UndoRedoActionCommand(
+                    journal.UndoOrThrow,
+                    journal.RedoOrThrow));
+
             undoRedoManager.Record();
 
             LastReviewExportSession =
@@ -959,7 +960,7 @@ public sealed class PronunciationAssistToolViewModel :
         catch (Exception ex)
         {
             string? rollbackError = null;
-            try { journal.RollbackOrThrow(); }
+            try { journal.UndoOrThrow(); }
             catch (Exception rollback) { rollbackError = rollback.GetBaseException().Message; }
             return ReviewImportExecutionResult.Failure(
                 (rollbackError is null ? "履歴登録に失敗し、変更を戻しました: "
@@ -1093,11 +1094,9 @@ public sealed class PronunciationAssistToolViewModel :
                         ?? "強制区切り編集を適用できませんでした。");
             }
 
-            undoRedoManager.AddCommand(
-                new UndoRedoActionCommand(
-                    journal.UndoOrThrow,
-                    journal.RedoOrThrow));
-
+            // VoiceItem.Serif is a normal YMM4-managed property.
+            // YMM4 records the property changes while this record is open.
+            // Do not add a duplicate custom UndoRedoActionCommand here.
             undoRedoManager.Record();
 
             LastReviewExportSession =
@@ -1116,7 +1115,7 @@ public sealed class PronunciationAssistToolViewModel :
 
             try
             {
-                journal.UndoOrThrow();
+                journal.RollbackOrThrow();
             }
             catch (Exception rollback)
             {
