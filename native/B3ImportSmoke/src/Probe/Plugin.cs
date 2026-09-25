@@ -792,6 +792,7 @@ internal static class Probe
             }
 
             await RunTypedSettingsUiLifecycleAsync(
+                timeline,
                 main,
                 selected,
                 typedUiEffect
@@ -812,15 +813,44 @@ internal static class Probe
     }
 
     static async Task RunTypedSettingsUiLifecycleAsync(
+        Timeline timeline,
         object main,
         VoiceItem voice,
         PronunciationAssistAudioEffect effect,
         UndoRedoManager manager)
     {
+        timeline.CurrentFrame =
+            voice.Frame;
+
+        timeline.SelectItems(
+            [voice]);
+
+        await WaitUntil(
+            "typed UI VoiceItem selection",
+            () =>
+                timeline.SelectedItems
+                    .Any(x =>
+                        ReferenceEquals(
+                            x,
+                            voice)),
+            5_000);
+
         var selectionAttempted =
-            SelectVoiceInItemEditor(
-                main,
-                voice);
+            timeline.SelectedItems
+                .Any(x =>
+                    ReferenceEquals(
+                        x,
+                        voice));
+
+        // Keep the ViewModel route only as a compatibility fallback if a
+        // future host stops updating Item Editor from the public Timeline API.
+        if (!selectionAttempted)
+        {
+            selectionAttempted =
+                SelectVoiceInItemEditorFallback(
+                    main,
+                    voice);
+        }
 
         await Task.Delay(500);
 
@@ -1134,7 +1164,7 @@ internal static class Probe
         }
     }
 
-    static bool SelectVoiceInItemEditor(
+    static bool SelectVoiceInItemEditorFallback(
         object main,
         VoiceItem voice)
     {
