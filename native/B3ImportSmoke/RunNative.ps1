@@ -143,6 +143,12 @@ try {
       Get-Content $typedUiObservation
     }
 
+    $forcedBoundaryObservation=Join-Path $OutputDir 'forced-boundary-input-observation.json'
+    if(Test-Path $forcedBoundaryObservation){
+      Write-Output '--- forced boundary input observation ---'
+      Get-Content $forcedBoundaryObservation
+    }
+
     $requestsPath=Join-Path $OutputDir 'fake-server-requests.jsonl'
     if(Test-Path $requestsPath){
       Write-Output '--- fake VOICEVOX requests ---'
@@ -203,7 +209,16 @@ try {
       'typed_ui_initial_helper_rule_visible',
       'typed_ui_helper_edit_applied',
       'typed_ui_helper_undo',
-      'typed_ui_helper_redo'
+      'typed_ui_helper_redo',
+      'typed_ui_boundary_token_visible',
+      'forced_boundary_input_voice_added',
+      'forced_boundary_input_effect_added',
+      'forced_boundary_token_not_automatic',
+      'forced_boundary_normalization_prepared',
+      'forced_boundary_normalization_committed',
+      'forced_boundary_normalization_recorded_once',
+      'forced_boundary_normalization_undo',
+      'forced_boundary_normalization_redo'
     )
 
     if($r.requirements.Count-ne$required.Count){
