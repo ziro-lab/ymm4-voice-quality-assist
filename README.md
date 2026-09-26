@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **vNext Phase 1–4 GREEN / Phase 5 Review Bridge alignment implemented, validation pending**  
+> Status: **vNext Phase 1–5 GREEN / Phase 6 candidate acceptance next**  
 > 現時点では配布版プラグインはありません。
 
 ## vNext 現在地
@@ -20,7 +20,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 - Harmony/private collection traversalはこの移行に不要です。
 - Phase 3もGREENです。Audio Effect内にtyped helper editorと抑揚selectorを実装し、raw `HelperRulesJson` をユーザー操作から隠しました。実YMM4でhelper追加→Undo→Redoまで確認済みです。
 - Phase 4もGREENです。Audio Effectで編集用tokenを設定し、Toolの明示操作でcanonical `<w0>`へ変換できます。自動キー横取りは行わず、YMM4標準Undo/Redoで1履歴、save→正常終了→再起動→public `OpenProject(path)` 後のmarker/token復元まで実YMM4で確認済みです。
-- Phase 5実装では、Review Bridgeの `addBoundary` wire名とclean-text `position` payloadを変えず、LLM prompt・Import preview・B1/Schema/Architecture説明を **「VOICEVOX自動アクセント用の強制区切り」** semanticsへ統一しました。現在は回帰検証中です。
+- Phase 5もGREENです。Review Bridgeの `addBoundary` wire名とclean-text `position` payloadを変えず、LLM prompt・Import preview・B1/Schema/Architecture説明を **「VOICEVOX自動アクセント用の強制区切り」** semanticsへ統一しました。実YMM4 B3でもpreview semanticsを確認済みです。
+- 次はPhase 6として、candidate packageと実VOICEVOX聴感を含む最終acceptanceへ進みます。
 
 正本:
 - `docs/VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md`
