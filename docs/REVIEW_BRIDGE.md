@@ -94,7 +94,13 @@ canonical operation:
 - `setProsodyGesture`
 - `noChange`
 
-B2ではLLMレビュー指示を製品側で決定的に生成します。Export packageをそのまま埋め込み、読み・固有名詞/技術語・句境界・helper・軽いprosodyを確認させます。
+`addBoundary { position }` は、clean text上の指定位置へ **VOICEVOX自動アクセント用の強制区切り** を要求します。これは既存のsource punctuation pauseを単に0にする命令ではありません。Pluginはcanonical `<w0>` をdurable Serifへ反映し、Track A runtimeが解析時だけ `、` を注入してVOICEVOXへ通常の自動アクセント再解析を行わせ、**Pluginが注入した読点のPauseMoraだけ**を0にします。元からある読点pauseは変更しません。
+
+`removeBoundary { position }` は、そのclean-text位置に保存されているcanonical強制区切り `<w0>` を削除します。
+
+B1 Exportの `controls.boundaries[].source == "w0"` は、既にSerifへ保存されているcanonical強制区切りを表します。wire名とposition payloadはv0のまま変更しません。
+
+B2ではLLMレビュー指示を製品側で決定的に生成します。Export packageをそのまま埋め込み、読み・固有名詞/技術語・VOICEVOX自動アクセント用の強制区切り・helper・軽いprosodyを確認させます。
 
 responseは全export Voiceをexactly once含め、変更不要でも `noChange` を明示します。返却はJSONのみで、説明文・Markdown fence・free-form codeをcanonical responseへ混ぜません。
 
@@ -132,7 +138,7 @@ B3製品実装で閉じたUI/apply境界:
 - rejected / stale / missing / ambiguous proposalを変更しない
 - apply直前にもfingerprintを再確認
 - batch preflightで1件でも失敗すれば全体未変更
-- literal `<w0>` 以外のofficial control tagがSerifに混在するboundary editはfail closed
+- literal `<w0>` 以外のofficial control tagがSerifに混在する強制区切りeditはfail closed
 - helperとboundaryの同位置衝突を拒否
 - durable Serif/Hatsuon/Assist Effectだけをjournal化
 - YMM4の `UndoRedoActionCommand + AddCommand + Record` へ1つのUndo単位として登録
@@ -173,7 +179,7 @@ Undo / Redo → baseline / corrected regeneration
 
 same-sessionで元export object mapが残っている場合は、timeline上のframe/layer移動だけではidentityを失いません。ただしsourceFingerprintが変わっていればSTALEです。cross-sessionではB0の厳格resolverを使い、複数exact fingerprintはlocatorで勝手に絞りません。
 
-B3 v0のboundary rewriteはsource破壊を避けるため、Serif中のofficial control tagがliteral `<w0>` だけの場合に限定します。`<w100>` 等の別official tagが混ざる場合は自動rewriteしません。
+B3 v0の強制区切りrewriteはsource破壊を避けるため、Serif中のofficial control tagがliteral `<w0>` だけの場合に限定します。`<w100>` 等の別official tagが混ざる場合は自動rewriteしません。Import previewでは境界差分を **「VOICEVOX自動アクセント用の強制区切り」** と表示します。
 
 Native chain: run `35993465363`, artifact `10805292609`.
 
@@ -181,7 +187,7 @@ Native chain: run `35993465363`, artifact `10805292609`.
 
 JSONがcanonicalです。
 
-B1では閲覧用CSVを実装済みです。1行1Voiceで、target、character/speaker、前後Serif、Serif/Hatsuon、cleanText/boundary、prosody/helper、generated pronunciation summary、source fingerprintを固定列順で出力します。
+B1では閲覧用CSVを実装済みです。1行1Voiceで、target、character/speaker、前後Serif、Serif/Hatsuon、cleanText/canonical強制区切り、prosody/helper、generated pronunciation summary、source fingerprintを固定列順で出力します。CSVの `boundaries` 列もwire互換のため列名は維持し、値 `position:w0` は保存済み強制区切りを意味します。
 
 ToolからJSON/CSVのSaveFileDialogを開けます。JSONはUTF-8、CSVは表計算ソフトで扱いやすいUTF-8 BOM付きで保存します。
 
@@ -193,15 +199,16 @@ LLMへ任せやすい:
 
 - 文脈依存読み
 - 固有名詞候補
-- 句境界候補
+- VOICEVOX自動アクセント用の強制区切り候補
 - helper mora候補
 - rough prosody direction
 
 Local deterministic engineへ残す:
 
 - `<w0>`解析
-- target mora解決
-- duration=0適用
+- forced boundary位置をsame-speaker readingへ写像
+- 解析時だけ日本語読点 `、` を注入してVOICEVOXへ再解析
+- Plugin注入PauseMoraだけduration=0適用
 - schema validation
 - stale/ambiguous detection
 - actual YMM4 mutation
