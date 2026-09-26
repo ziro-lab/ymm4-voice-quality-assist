@@ -78,6 +78,13 @@ internal static class Probe
         if (!string.IsNullOrWhiteSpace(
                 reloadProject))
         {
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "reload-probe-started.txt"),
+                Path.GetFullPath(
+                    reloadProject));
+
             Application.Current.Dispatcher.BeginInvoke(
                 new Action(
                     () => StartReload(
