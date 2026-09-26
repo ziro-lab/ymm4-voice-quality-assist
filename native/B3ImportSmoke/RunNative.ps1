@@ -313,10 +313,9 @@ try {
 
     $env:VQA_B3_RELOAD_PROJECT=$project
 
-    $projectArg='"' + $project + '"'
     $reloadProcess=Start-Process (
       Join-Path $Ymm4Dir 'YukkuriMovieMaker.exe'
-    ) -ArgumentList $projectArg -WorkingDirectory $Ymm4Dir -PassThru
+    ) -WorkingDirectory $Ymm4Dir -PassThru
 
     try {
       $reloadLimit=[DateTime]::UtcNow.AddSeconds(90)
