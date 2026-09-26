@@ -85,8 +85,19 @@ public sealed class VoiceApplyLease : IDisposable
         }
     }
 
-    void OnInputChanged(object? sender, PropertyChangedEventArgs e) =>
+    void OnInputChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is IPronunciationAssistSettings
+            && string.Equals(
+                e.PropertyName,
+                nameof(IPronunciationAssistSettings.BoundaryInputToken),
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
         Interlocked.Exchange(ref invalidated, 1);
+    }
 
     static EffectInput[] ReadEffects(VoiceItem voice) =>
         ReviewAssistEffectCollection.Enumerate(voice)

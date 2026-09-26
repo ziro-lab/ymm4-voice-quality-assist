@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **PHASE 0–3 GREEN / PHASE 4 NEXT**
+Status: **PHASE 0–4 GREEN / PHASE 5 NEXT**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -252,26 +252,58 @@ Inline Effect status is optional for this round.
 
 ## Phase 4 — Input-token normalization
 
-Preferred:
+Status: **GREEN**
 
-- user chooses token;
-- explicit or normal public edit action converts token -> `<w0>`;
-- one YMM4 Undo record;
-- no Harmony;
-- no global text interception.
+Accepted product code source: `ae28abd6f45db26fa56774fb51c468da66f7e108` (PR #15).  
+Accepted validation source: `0142d891d657dec34eb19ce79faf49e3cb4b6042`.
 
-Safety tests:
+Implemented policy:
 
-- token already exists in ordinary text before feature enable;
-- token inside YMM4 control tag;
-- multiple tokens;
-- empty token;
-- multi-character token;
-- Undo/Redo;
-- save/reload.
+- each Pronunciation Assist setting persists an editing-only `BoundaryInputToken` (default `|`);
+- token changes do not alter audio source identity and do not by themselves trigger synthesis;
+- normalization is **explicit user action only**; no automatic keyboard interception;
+- selected VoiceItems convert the configured token to canonical `<w0>`;
+- an explicit clean-text-position insertion action is also available as fallback;
+- `VoiceItem.Serif` changes use normal YMM4 property history, producing one native Undo record rather than a duplicate custom command;
+- legacy subtitle Effect -> Audio Effect migration preserves the token exactly;
+- empty/whitespace, overlong, control-character and `<` / `>` tokens are rejected;
+- token occurrences inside YMM4 control-tag spans are protected;
+- source changes after prepare fail closed;
+- insertion into surrogate-pair interiors is rejected;
+- normalization rejects first/last-position boundaries, adjacent tokens resolving to the same clean-text position, and collisions with an existing canonical `<w0>`.
 
-If automatic normalization cannot be done safely:
-ship an explicit Insert Boundary action first.
+Acceptance on pinned YMM4 Lite 4.56.1.0:
+
+- unit/build: run `36203926580`, job `108296416941`
+  - **204/204 PASS**
+  - 0 build errors
+- A1 native: run `36203926573`, job `108296308858`
+  - artifact `10893770006`
+  - SHA256 `7c12ed4ee0dc44f8ddda13cb13700857153c05c007100881dcaa409615fa7f32`
+- A2 helper native: run `36203926625`, job `108296498507`
+  - artifact `10893106907`
+  - SHA256 `f060609f0d8d170c06ad30a7605f440e5c560210c40fd3a272ff81db56d91b25`
+- A3 prosody native: run `36203926587`, job `108296499082`
+  - artifact `10893705253`
+  - SHA256 `cfacc68d90e19893a4079797d2f2ef945304c8d8f1c32242f55d80351af99c7e`
+- B3 import / typed UI / Phase 4 native: run `36203926607`, job `108296495055`
+  - artifact `10893700301`
+  - SHA256 `b0af2c6413365af9da55f5ffe973e4d67b720bc5d00865a0b1d9298c6ae6e96d`
+  - `PASS_B3_IMPORT_PRODUCT_NATIVE_SMOKE_E2E`
+  - `PASS_B3_FORCED_BOUNDARY_RESTART_RELOAD_E2E`
+
+Real-host Phase 4 proof includes:
+
+- token text remains ordinary Serif until explicit normalization;
+- `え|ええ -> え<w0>ええ`;
+- exactly one normal YMM4 Undo record;
+- Undo restores the original token text;
+- Redo restores canonical `<w0>`;
+- saved YMMP contains the canonical marker and configured token;
+- after a clean YMM4 shutdown + restart, the probe opens the saved project through public `OpenProject(path)`;
+- reloaded VoiceItem restores `<w0>`, `BoundaryInputToken`, and Effect enabled state exactly.
+
+No Harmony and no global keyboard interception are used.
 
 ## Phase 5 — Review Bridge alignment
 

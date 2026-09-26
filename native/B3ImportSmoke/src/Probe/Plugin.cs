@@ -47,13 +47,23 @@ internal static class Probe
             Environment.GetEnvironmentVariable(
                 "VQA_B3_NATIVE_OUTPUT");
 
+        var reloadProject =
+            Environment.GetEnvironmentVariable(
+                "VQA_B3_RELOAD_PROJECT");
+
         var url =
             Environment.GetEnvironmentVariable(
                 "VQA_B3_FAKE_VOICEVOX_URL");
 
         if (scheduled
-            || string.IsNullOrWhiteSpace(dir)
-            || string.IsNullOrWhiteSpace(url))
+            || string.IsNullOrWhiteSpace(dir))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                reloadProject)
+            && string.IsNullOrWhiteSpace(url))
         {
             return;
         }
@@ -65,10 +75,236 @@ internal static class Probe
         Directory.CreateDirectory(
             output);
 
+        if (!string.IsNullOrWhiteSpace(
+                reloadProject))
+        {
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "reload-probe-started.txt"),
+                Path.GetFullPath(
+                    reloadProject));
+
+            Application.Current.Dispatcher.BeginInvoke(
+                new Action(
+                    () => StartReload(
+                        Path.GetFullPath(
+                            reloadProject))),
+                DispatcherPriority.ApplicationIdle);
+
+            return;
+        }
+
         Application.Current.Dispatcher.BeginInvoke(
             new Action(
-                () => Start(url)),
+                () => Start(url!)),
             DispatcherPriority.ApplicationIdle);
+    }
+
+    static void StartReload(
+        string project)
+    {
+        var ticks = 0;
+        var opening = false;
+
+        var timer =
+            new DispatcherTimer(
+                DispatcherPriority.ApplicationIdle)
+            {
+                Interval =
+                    TimeSpan.FromMilliseconds(300),
+            };
+
+        timer.Tick +=
+            async (_, _) =>
+            {
+                if (opening)
+                    return;
+
+                try
+                {
+                    ticks++;
+
+                    var main =
+                        Application.Current.Windows
+                            .Cast<Window>()
+                            .Select(x =>
+                                x.DataContext)
+                            .FirstOrDefault(x =>
+                                x?.GetType().FullName
+                                == "YukkuriMovieMaker.ViewModels.MainViewModel");
+
+                    if (main is null)
+                    {
+                        if (ticks > 240)
+                        {
+                            throw new TimeoutException(
+                                "MainViewModel was not created in reload mode.");
+                        }
+
+                        return;
+                    }
+
+                    opening = true;
+                    timer.Stop();
+
+                    var open =
+                        PublicMethod(
+                            main,
+                            "OpenProject",
+                            typeof(string));
+
+                    await InvokePublicProjectMethodAsync(
+                        open,
+                        main,
+                        project,
+                        "OpenProject");
+
+                    const string remark =
+                        "B3_FORCED_BOUNDARY_INPUT";
+
+                    await WaitUntil(
+                        "phase4 restart public OpenProject",
+                        () =>
+                            FindVoiceFromActiveTimeline(
+                                main,
+                                remark)
+                            is not null,
+                        30_000);
+
+                    var voice =
+                        FindVoiceFromActiveTimeline(
+                            main,
+                            remark)
+                        ?? throw new InvalidOperationException(
+                            "Saved Phase 4 VoiceItem was not loaded through public OpenProject.");
+
+                    WriteReloadResult(
+                        project,
+                        voice,
+                        null);
+                }
+                catch (Exception ex)
+                {
+                    timer.Stop();
+
+                    WriteReloadFailure(
+                        project,
+                        ex);
+                }
+            };
+
+        timer.Start();
+    }
+
+    static void WriteReloadResult(
+        string project,
+        VoiceItem voice,
+        string? error)
+    {
+        var restored =
+            PronunciationAssistSettingsStore
+                .EnumerateAudio(
+                    voice)
+                .SingleOrDefault();
+
+        var parsed =
+            BoundaryMarkerParser.Parse(
+                voice.Serif
+                ?? string.Empty);
+
+        var passed =
+            restored is not null
+            && restored.BoundaryInputToken
+                == "||"
+            && !restored.IsEnabled
+            && string.Equals(
+                voice.Serif,
+                "え<w0>ええ",
+                StringComparison.Ordinal)
+            && parsed.ZeroWaitPositions
+                .SequenceEqual(
+                    [1]);
+
+        if (!passed)
+        {
+            error ??=
+                "Reloaded Phase 4 state did not match the saved marker/token/effect state.";
+        }
+
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "reload-result.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    schema =
+                        "vqa.b3.forced-boundary-reload.v1",
+                    status =
+                        passed
+                            ? "PASS_B3_FORCED_BOUNDARY_RELOAD"
+                            : "FAIL_B3_FORCED_BOUNDARY_RELOAD",
+                    host =
+                        "4.56.1.0 Lite",
+                    sourceHead =
+                        Environment.GetEnvironmentVariable(
+                            "GITHUB_SHA"),
+                    project,
+                    serif =
+                        voice.Serif,
+                    markerPositions =
+                        parsed.ZeroWaitPositions,
+                    boundaryInputToken =
+                        restored
+                            ?.BoundaryInputToken,
+                    effectEnabled =
+                        restored
+                            ?.IsEnabled,
+                    error,
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+    }
+
+    static void WriteReloadFailure(
+        string project,
+        Exception ex)
+    {
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "reload-result.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    schema =
+                        "vqa.b3.forced-boundary-reload.v1",
+                    status =
+                        "FAIL_B3_FORCED_BOUNDARY_RELOAD",
+                    host =
+                        "4.56.1.0 Lite",
+                    sourceHead =
+                        Environment.GetEnvironmentVariable(
+                            "GITHUB_SHA"),
+                    project,
+                    serif =
+                        (string?)null,
+                    markerPositions =
+                        Array.Empty<int>(),
+                    boundaryInputToken =
+                        (string?)null,
+                    effectEnabled =
+                        (bool?)null,
+                    error =
+                        ex.ToString(),
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
     }
 
     static void Start(
@@ -800,11 +1036,22 @@ internal static class Probe
                         "Typed UI target effect was unavailable."),
                 manager);
 
+            var boundaryFixture =
+                await RunForcedBoundaryInputLifecycleAsync(
+                    timeline,
+                    character,
+                    parameter,
+                    manager);
+
             await RunLegacyMigrationLifecycleAsync(
                 timeline,
                 character,
                 parameter,
                 manager);
+
+            await RunForcedBoundaryPersistenceSaveAsync(
+                main,
+                boundaryFixture);
         }
         finally
         {
@@ -968,6 +1215,15 @@ internal static class Probe
                 x.Contains(
                     "新しい補助モーラ",
                     StringComparison.Ordinal)));
+
+        Check(
+            "typed_ui_boundary_token_visible",
+            texts.Any(x =>
+                x.Contains(
+                    "強制区切り入力記号",
+                    StringComparison.Ordinal))
+            && effect.BoundaryInputToken
+                == ForcedBoundaryInputToken.Default);
 
         Check(
             "typed_ui_prosody_editor_visible",
@@ -1807,6 +2063,384 @@ internal static class Probe
             _ =>
                 null,
         };
+
+    static async Task<ForcedBoundaryPersistenceFixture>
+        RunForcedBoundaryInputLifecycleAsync(
+            Timeline timeline,
+            Character character,
+            IVoiceParameter parameter,
+            UndoRedoManager manager)
+    {
+        var voice =
+            CreateVoice(
+                character,
+                parameter,
+                "え|ええ",
+                "エエエ",
+                "B3_FORCED_BOUNDARY_INPUT");
+
+        Check(
+            "forced_boundary_input_voice_added",
+            timeline.TryAddItems(
+                [voice],
+                960,
+                9));
+
+        var effect =
+            new PronunciationAssistAudioEffect
+            {
+                IsEnabled = true,
+                BoundaryInputToken = "|",
+            };
+
+        Check(
+            "forced_boundary_input_effect_added",
+            PronunciationAssistSettingsStore
+                .TryAdd(
+                    voice,
+                    effect,
+                    out var addError)
+            && addError is null
+            && voice.AudioEffects
+                .Cast<object>()
+                .Any(x =>
+                    ReferenceEquals(
+                        x,
+                        effect)));
+
+        Check(
+            "forced_boundary_token_not_automatic",
+            voice.Serif == "え|ええ"
+            && BoundaryMarkerParser
+                .Parse(
+                    voice.Serif)
+                .ZeroWaitPositions.Count
+                == 0);
+
+        var prepared =
+            ForcedBoundaryEditPlanner
+                .PrepareNormalizeTokens(
+                    [voice]);
+
+        Check(
+            "forced_boundary_normalization_prepared",
+            prepared.IsReady
+            && prepared.Journal is not null
+            && prepared.Journal
+                .ChangedBoundaryCount == 1
+            && voice.Serif == "え|ええ");
+
+        var journal =
+            prepared.Journal
+            ?? throw new InvalidOperationException(
+                "Forced-boundary journal missing.");
+
+        manager.Record();
+
+        var recorded = 0;
+        var undoed = 0;
+        var redoed = 0;
+
+        EventHandler recordedHandler =
+            (_, _) =>
+                recorded++;
+
+        EventHandler undoedHandler =
+            (_, _) =>
+                undoed++;
+
+        EventHandler redoedHandler =
+            (_, _) =>
+                redoed++;
+
+        manager.Recorded +=
+            recordedHandler;
+        manager.Undoed +=
+            undoedHandler;
+        manager.Redoed +=
+            redoedHandler;
+
+        try
+        {
+            var committed =
+                journal.Commit(
+                    target =>
+                        timeline.Items
+                            .Any(x =>
+                                ReferenceEquals(
+                                    x,
+                                    target)));
+
+            Check(
+                "forced_boundary_normalization_committed",
+                committed.IsSuccess
+                && voice.Serif
+                    == "え<w0>ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions
+                    .SequenceEqual(
+                        [1])
+                && effect.BoundaryInputToken
+                    == "|");
+
+            // Serif is host-managed. Finalizing the record must be
+            // sufficient; adding a custom command would duplicate YMM4's
+            // own property-change undo command.
+            manager.Record();
+
+            Check(
+                "forced_boundary_normalization_recorded_once",
+                recorded == 1);
+
+            if (recorded != 1)
+            {
+                throw new InvalidOperationException(
+                    "Forced-boundary normalization did not create exactly one YMM4 undo record.");
+            }
+
+            await manager.UndoAsync();
+
+            Check(
+                "forced_boundary_normalization_undo",
+                undoed == 1
+                && voice.Serif
+                    == "え|ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions.Count
+                    == 0);
+
+            await manager.RedoAsync();
+
+            Check(
+                "forced_boundary_normalization_redo",
+                redoed == 1
+                && voice.Serif
+                    == "え<w0>ええ"
+                && BoundaryMarkerParser
+                    .Parse(
+                        voice.Serif)
+                    .ZeroWaitPositions
+                    .SequenceEqual(
+                        [1]));
+
+            File.WriteAllText(
+                Path.Combine(
+                    output,
+                    "forced-boundary-input-observation.json"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        effect.BoundaryInputToken,
+                        voice.Serif,
+                        positions =
+                            BoundaryMarkerParser
+                                .Parse(
+                                    voice.Serif)
+                                .ZeroWaitPositions,
+                        recorded,
+                        undoed,
+                        redoed,
+                    },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    }));
+        }
+        finally
+        {
+            manager.Recorded -=
+                recordedHandler;
+            manager.Undoed -=
+                undoedHandler;
+            manager.Redoed -=
+                redoedHandler;
+        }
+
+        return new(
+            voice,
+            effect);
+    }
+
+    static async Task RunForcedBoundaryPersistenceSaveAsync(
+        object main,
+        ForcedBoundaryPersistenceFixture fixture)
+    {
+        const string remark =
+            "B3_FORCED_BOUNDARY_INPUT";
+
+        var save =
+            PublicMethod(
+                main,
+                "SaveProject",
+                typeof(string));
+
+        fixture.Effect.IsEnabled =
+            false;
+
+        fixture.Effect.BoundaryInputToken =
+            "||";
+
+        Check(
+            "forced_boundary_persistence_fixture_ready",
+            string.Equals(
+                fixture.Voice.Remark,
+                remark,
+                StringComparison.Ordinal)
+            && string.Equals(
+                fixture.Voice.Serif,
+                "え<w0>ええ",
+                StringComparison.Ordinal)
+            && fixture.Effect.BoundaryInputToken
+                == "||"
+            && !fixture.Effect.IsEnabled);
+
+        var project =
+            Path.Combine(
+                output,
+                "phase4-boundary-persistence.ymmp");
+
+        await InvokePublicProjectMethodAsync(
+            save,
+            main,
+            project,
+            "SaveProject");
+
+        await WaitUntil(
+            "phase4 persistence save",
+            () =>
+                File.Exists(
+                    project)
+                && new FileInfo(
+                    project)
+                    .Length > 0,
+            15_000);
+
+        var savedText =
+            File.ReadAllText(
+                project);
+
+        Check(
+            "forced_boundary_persistence_saved",
+            savedText.Contains(
+                "\"Remark\":\"B3_FORCED_BOUNDARY_INPUT\"",
+                StringComparison.Ordinal)
+            && savedText.Contains(
+                "\"BoundaryInputToken\":\"||\"",
+                StringComparison.Ordinal)
+            && savedText.Contains(
+                "\"Serif\":\"え<w0>ええ\"",
+                StringComparison.Ordinal));
+
+        File.WriteAllText(
+            Path.Combine(
+                output,
+                "forced-boundary-save-observation.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    project,
+                    fileLength =
+                        new FileInfo(
+                            project)
+                            .Length,
+                    fixture.Voice.Serif,
+                    boundaryInputToken =
+                        fixture.Effect
+                            .BoundaryInputToken,
+                    effectEnabled =
+                        fixture.Effect
+                            .IsEnabled,
+                },
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                }));
+    }
+
+    sealed record ForcedBoundaryPersistenceFixture(
+        VoiceItem Voice,
+        PronunciationAssistAudioEffect Effect);
+
+    static async Task InvokePublicProjectMethodAsync(
+        MethodInfo method,
+        object target,
+        string path,
+        string operation)
+    {
+        object? result;
+
+        try
+        {
+            result =
+                method.Invoke(
+                    target,
+                    [path]);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw new InvalidOperationException(
+                operation
+                + " invocation failed.",
+                ex.InnerException
+                    ?? ex);
+        }
+
+        if (result is Task task)
+        {
+            await task.WaitAsync(
+                TimeSpan.FromSeconds(30));
+        }
+    }
+
+    static MethodInfo PublicMethod(
+        object target,
+        string name,
+        params Type[] parameterTypes) =>
+        target.GetType()
+            .GetMethod(
+                name,
+                BindingFlags.Instance
+                | BindingFlags.Public,
+                binder: null,
+                parameterTypes,
+                modifiers: null)
+        ?? throw new MissingMethodException(
+            target.GetType()
+                .FullName,
+            name);
+
+    static VoiceItem? FindVoiceFromActiveTimeline(
+        object main,
+        string remark)
+    {
+        var active =
+            main.GetType()
+                .GetProperty(
+                    "ActiveTimelineViewModel",
+                    BindingFlags.Instance
+                    | BindingFlags.Public
+                    | BindingFlags.NonPublic)
+                ?.GetValue(
+                    main);
+
+        var timeline =
+            active is null
+                ? null
+                : FindTimeline(
+                    active);
+
+        return timeline?.Items
+            .OfType<VoiceItem>()
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.Remark,
+                    remark,
+                    StringComparison.Ordinal));
+    }
 
     static async Task RunLegacyMigrationLifecycleAsync(
         Timeline timeline,

@@ -17,6 +17,11 @@ public sealed class PronunciationAssistSettingsStoreTests
             Assert.IsType<PronunciationAssistAudioEffect>(
                 settings);
 
+        Assert.Equal(
+            ForcedBoundaryInputToken.Default,
+            audio.BoundaryInputToken);
+
+        audio.BoundaryInputToken = "｜";
         audio.HelperRulesJson = "rules";
         audio.Prosody = ProsodyGesture.Hold;
 
@@ -107,6 +112,7 @@ public sealed class PronunciationAssistSettingsStoreTests
             new PronunciationAssistEffect
             {
                 IsEnabled = false,
+                BoundaryInputToken = "||",
                 HelperRulesJson = "legacy-rules",
                 Prosody = ProsodyGesture.Hold,
             };
@@ -147,6 +153,9 @@ public sealed class PronunciationAssistSettingsStoreTests
 
         Assert.False(audio.IsEnabled);
         Assert.Equal(
+            "||",
+            audio.BoundaryInputToken);
+        Assert.Equal(
             "legacy-rules",
             audio.HelperRulesJson);
         Assert.Equal(
@@ -170,6 +179,9 @@ public sealed class PronunciationAssistSettingsStoreTests
 
         Assert.False(restored.IsEnabled);
         Assert.Equal(
+            "||",
+            restored.BoundaryInputToken);
+        Assert.Equal(
             "legacy-rules",
             restored.HelperRulesJson);
         Assert.Equal(
@@ -192,6 +204,9 @@ public sealed class PronunciationAssistSettingsStoreTests
             redone);
 
         Assert.False(redone.IsEnabled);
+        Assert.Equal(
+            "||",
+            redone.BoundaryInputToken);
         Assert.Equal(
             "legacy-rules",
             redone.HelperRulesJson);

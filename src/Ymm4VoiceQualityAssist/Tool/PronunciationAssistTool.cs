@@ -34,6 +34,9 @@ public sealed class PronunciationAssistToolView : UserControl
     }
 
     readonly TextBlock status;
+    readonly Button normalizeBoundaryButton;
+    readonly Button insertBoundaryButton;
+    readonly TextBox boundaryPositionBox;
     readonly Button jsonExportButton;
     readonly Button csvExportButton;
     readonly Button llmPromptExportButton;
@@ -57,6 +60,99 @@ public sealed class PronunciationAssistToolView : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
         };
+
+        var boundaryTitle = new TextBlock
+        {
+            Text = "強制区切り",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+
+        var boundaryDescription = new TextBlock
+        {
+            Text =
+                "発音補助Audio Effectで設定した入力記号を、明示操作でcanonical <w0>へ変換します。"
+                + " 自動入力監視やHarmonyによるキー横取りは行いません。",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+
+        normalizeBoundaryButton = new Button
+        {
+            Content = "選択ボイスの入力記号を強制区切りへ変換",
+            Padding = new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MinWidth = 260,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        normalizeBoundaryButton.Click +=
+            (_, _) =>
+                NormalizeBoundaryTokens();
+
+        var positionRow =
+            new StackPanel
+            {
+                Orientation =
+                    Orientation.Horizontal,
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        0,
+                        12),
+            };
+
+        positionRow.Children.Add(
+            new TextBlock
+            {
+                Text = "本文位置",
+                VerticalAlignment =
+                    VerticalAlignment.Center,
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        6,
+                        0),
+            });
+
+        boundaryPositionBox =
+            new TextBox
+            {
+                Text = "1",
+                Width = 64,
+                VerticalContentAlignment =
+                    VerticalAlignment.Center,
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        6,
+                        0),
+            };
+
+        positionRow.Children.Add(
+            boundaryPositionBox);
+
+        insertBoundaryButton =
+            new Button
+            {
+                Content = "強制区切りを追加",
+                Padding =
+                    new Thickness(
+                        10,
+                        6,
+                        10,
+                        6),
+                MinWidth = 140,
+            };
+
+        insertBoundaryButton.Click +=
+            (_, _) =>
+                InsertBoundaryAtPosition();
+
+        positionRow.Children.Add(
+            insertBoundaryButton);
 
         jsonExportButton = new Button
         {
@@ -142,6 +238,10 @@ public sealed class PronunciationAssistToolView : UserControl
             {
                 title,
                 description,
+                boundaryTitle,
+                boundaryDescription,
+                normalizeBoundaryButton,
+                positionRow,
                 jsonExportButton,
                 csvExportButton,
                 llmPromptExportButton,
@@ -151,6 +251,92 @@ public sealed class PronunciationAssistToolView : UserControl
                 runtimeStatus,
             },
         };
+    }
+
+    void NormalizeBoundaryTokens()
+    {
+        if (DataContext
+            is not PronunciationAssistToolViewModel viewModel)
+        {
+            status.Text =
+                "Voice Quality Assistの状態を取得できませんでした。";
+            return;
+        }
+
+        SetActionButtonsEnabled(false);
+
+        try
+        {
+            var result =
+                viewModel.NormalizeSelectedBoundaryTokens();
+
+            status.Text =
+                result.IsSuccess
+                    ? result.ChangedBoundaryCount == 0
+                        ? result.Message
+                            ?? "変換対象の入力記号はありません。"
+                        : $"{result.VoiceCount}件のVoiceItemで{result.ChangedBoundaryCount}個の強制区切りを確定しました。YMM4の元に戻す/やり直しに対応しています。"
+                    : result.Message
+                        ?? "強制区切りへ変換できませんでした。";
+        }
+        catch (Exception ex)
+        {
+            status.Text =
+                "強制区切りへの変換に失敗しました: "
+                + ex.GetBaseException().Message;
+        }
+        finally
+        {
+            SetActionButtonsEnabled(true);
+        }
+    }
+
+    void InsertBoundaryAtPosition()
+    {
+        if (DataContext
+            is not PronunciationAssistToolViewModel viewModel)
+        {
+            status.Text =
+                "Voice Quality Assistの状態を取得できませんでした。";
+            return;
+        }
+
+        if (!int.TryParse(
+                boundaryPositionBox.Text,
+                out var position))
+        {
+            status.Text =
+                "本文位置を整数で入力してください。";
+            return;
+        }
+
+        SetActionButtonsEnabled(false);
+
+        try
+        {
+            var result =
+                viewModel.InsertBoundaryAtSelectedVoice(
+                    position);
+
+            status.Text =
+                result.IsSuccess
+                    ? result.ChangedBoundaryCount == 0
+                        ? result.Message
+                            ?? "指定位置には既に強制区切りがあります。"
+                        : $"本文位置 {position} に強制区切りを追加しました。YMM4の元に戻す/やり直しに対応しています。"
+                    : result.Message
+                        ?? "強制区切りを追加できませんでした。";
+        }
+        catch (Exception ex)
+        {
+            status.Text =
+                "強制区切りの追加に失敗しました: "
+                + ex.GetBaseException().Message;
+        }
+        finally
+        {
+            SetActionButtonsEnabled(true);
+        }
     }
 
     async Task ImportAsync()
@@ -559,6 +745,9 @@ public sealed class PronunciationAssistToolView : UserControl
     void SetActionButtonsEnabled(
         bool enabled)
     {
+        normalizeBoundaryButton.IsEnabled = enabled;
+        insertBoundaryButton.IsEnabled = enabled;
+        boundaryPositionBox.IsEnabled = enabled;
         jsonExportButton.IsEnabled = enabled;
         csvExportButton.IsEnabled = enabled;
         llmPromptExportButton.IsEnabled = enabled;
@@ -780,6 +969,175 @@ public sealed class PronunciationAssistToolViewModel :
         }
     }
 
+    public ForcedBoundaryToolExecutionResult
+        NormalizeSelectedBoundaryTokens()
+    {
+        if (timeline is null)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    "Timelineを取得できませんでした。");
+        }
+
+        var selected =
+            timeline.SelectedItems
+                .OfType<VoiceItem>()
+                .ToArray();
+
+        var prepared =
+            ForcedBoundaryEditPlanner
+                .PrepareNormalizeTokens(
+                    selected);
+
+        return ExecuteForcedBoundaryEdit(
+            prepared);
+    }
+
+    public ForcedBoundaryToolExecutionResult
+        InsertBoundaryAtSelectedVoice(
+            int cleanTextPosition)
+    {
+        if (timeline is null)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    "Timelineを取得できませんでした。");
+        }
+
+        var selected =
+            timeline.SelectedItems
+                .OfType<VoiceItem>()
+                .ToArray();
+
+        if (selected.Length != 1)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    "本文位置で強制区切りを追加する場合は、VoiceItemを1件だけ選択してください。");
+        }
+
+        var prepared =
+            ForcedBoundaryEditPlanner
+                .PrepareInsert(
+                    selected[0],
+                    cleanTextPosition);
+
+        return ExecuteForcedBoundaryEdit(
+            prepared);
+    }
+
+    ForcedBoundaryToolExecutionResult
+        ExecuteForcedBoundaryEdit(
+            ForcedBoundaryEditPrepareResult
+                prepared)
+    {
+        if (prepared.Status
+            == ForcedBoundaryEditPrepareStatus.NoChanges)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Success(
+                    0,
+                    0,
+                    prepared.Message);
+        }
+
+        if (!prepared.IsReady
+            || prepared.Journal is null)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    prepared.Message
+                    ?? "強制区切り編集を準備できませんでした。");
+        }
+
+        if (undoRedoManager is null)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    "YMM4のUndoRedoManagerを取得できませんでした。");
+        }
+
+        var currentTimeline =
+            timeline;
+
+        if (currentTimeline is null)
+        {
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    "対象のTimelineが閉じられました。");
+        }
+
+        var journal =
+            prepared.Journal;
+
+        try
+        {
+            undoRedoManager.Record();
+
+            var committed =
+                journal.Commit(
+                    voice =>
+                        ReferenceEquals(
+                            timeline,
+                            currentTimeline)
+                        && currentTimeline.Items
+                            .Any(x =>
+                                ReferenceEquals(
+                                    x,
+                                    voice)));
+
+            if (!committed.IsSuccess)
+            {
+                return ForcedBoundaryToolExecutionResult
+                    .Failure(
+                        committed.Message
+                        ?? "強制区切り編集を適用できませんでした。");
+            }
+
+            // VoiceItem.Serif is a normal YMM4-managed property.
+            // YMM4 records the property changes while this record is open.
+            // Do not add a duplicate custom UndoRedoActionCommand here.
+            undoRedoManager.Record();
+
+            LastReviewExportSession =
+                null;
+
+            return ForcedBoundaryToolExecutionResult
+                .Success(
+                    journal.VoiceCount,
+                    journal.ChangedBoundaryCount,
+                    null);
+        }
+        catch (Exception ex)
+        {
+            string? rollbackError =
+                null;
+
+            try
+            {
+                journal.RollbackOrThrow();
+            }
+            catch (Exception rollback)
+            {
+                rollbackError =
+                    rollback.GetBaseException()
+                        .Message;
+            }
+
+            return ForcedBoundaryToolExecutionResult
+                .Failure(
+                    rollbackError is null
+                        ? "履歴登録に失敗し、強制区切り編集を戻しました: "
+                            + ex.GetBaseException()
+                                .Message
+                        : "履歴登録と復旧に失敗しました。上書き保存せず対象を確認してください: "
+                            + rollbackError
+                            + " / "
+                            + ex.GetBaseException()
+                                .Message);
+        }
+    }
+
     public PronunciationAssistMigrationExecutionResult
         MigrateLegacySettings()
     {
@@ -886,6 +1244,34 @@ public sealed class PronunciationAssistToolViewModel :
     }
 
 }
+
+public sealed record ForcedBoundaryToolExecutionResult(
+    bool IsSuccess,
+    int VoiceCount,
+    int ChangedBoundaryCount,
+    string? Message)
+{
+    public static ForcedBoundaryToolExecutionResult
+        Success(
+            int voiceCount,
+            int changedBoundaryCount,
+            string? message) =>
+        new(
+            true,
+            voiceCount,
+            changedBoundaryCount,
+            message);
+
+    public static ForcedBoundaryToolExecutionResult
+        Failure(
+            string message) =>
+        new(
+            false,
+            0,
+            0,
+            message);
+}
+
 
 public sealed record ReviewImportPreparationResult(
     bool IsSuccess,

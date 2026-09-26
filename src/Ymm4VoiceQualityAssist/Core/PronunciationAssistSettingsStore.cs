@@ -18,6 +18,7 @@ public sealed record PronunciationAssistSettingsEntry(
 
 public sealed record PronunciationAssistSettingsSnapshot(
     bool IsEnabled,
+    string BoundaryInputToken,
     string HelperRulesJson,
     ProsodyGesture Prosody)
 {
@@ -28,6 +29,7 @@ public sealed record PronunciationAssistSettingsSnapshot(
 
         return new(
             settings.IsEnabled,
+            settings.BoundaryInputToken,
             settings.HelperRulesJson,
             settings.Prosody);
     }
@@ -38,6 +40,7 @@ public sealed record PronunciationAssistSettingsSnapshot(
         ArgumentNullException.ThrowIfNull(settings);
 
         settings.IsEnabled = IsEnabled;
+        settings.BoundaryInputToken = BoundaryInputToken;
         settings.HelperRulesJson = HelperRulesJson;
         settings.Prosody = Prosody;
     }
@@ -167,6 +170,7 @@ public static class PronunciationAssistSettingsStore
         new PronunciationAssistAudioEffect
         {
             IsEnabled = true,
+            BoundaryInputToken = ForcedBoundaryInputToken.Default,
             HelperRulesJson = string.Empty,
             Prosody = ProsodyGesture.None,
         };
