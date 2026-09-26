@@ -14,8 +14,8 @@ VoiceItem ───────────────────────�
   ├─ Serif                              │
   ├─ Hatsuon                            │
   ├─ Pronounce / AudioQuery             │
-  └─ JimakuVideoEffects                 │
-       └─ Voice Quality Assist Key       │
+  └─ AudioEffects                       │
+       └─ Pronunciation Assist           │
                                         ▼
                               Local Correction Engine
                                         │
@@ -25,7 +25,7 @@ VoiceItem ───────────────────────�
 
 ## 2. Per-item opt-in
 
-VoiceItemの字幕Effect列 `JimakuVideoEffects` に、Voice Quality Assist用Effectを保持する構想です。
+canonicalなPronunciation Assist設定は `VoiceItem.AudioEffects` に保持します。旧candidateで使った `JimakuVideoEffects` の `PronunciationAssistEffect` は互換read対象として残し、明示migrationでAudio Effectへ移行します。新規writeはAudio Effectのみです。
 
 このEffectの責務:
 
@@ -66,38 +66,33 @@ Operator == Set
 
 非ゼロwait（例: `<w100>`）は発音境界として扱いません。
 
-### Boundary mapping safety
+### Forced-boundary mapping safety
 
-Lab PR #136で、Serif-only `<w0>`はYMM4/VOICEVOXの生成経路を自動的にAccentPhrase境界へ変換しないことを確認しました。
+Lab PR #136で、Serif-only `<w0>`はYMM4/VOICEVOXの生成経路を自動的にAccentPhrase境界へ変換しないことを確認しました。vNextでは `<w0>` を「既存pauseを0にする印」ではなく、**VOICEVOX自動アクセント用の強制区切りintent** として扱います。
 
-そのため、Serifのclean-text位置をそのままVOICEVOX mora indexとして扱いません。A1では、同じactive voice providerが返すreadingへ境界を写像し、現在のHatsuon / AudioQuery mora列に**一意かつexactに対応する場合だけ**PauseMoraを対象にします。
+Serifのclean-text位置をそのままVOICEVOX mora indexとして扱いません。同じactive voice providerのfull/prefix readingからreading上の挿入位置を一意に求め、その位置へ解析時だけ日本語読点 `、` を注入します。VOICEVOXにはそのtransient readingを通常どおり解析させ、両側のaccentを自動生成させます。
 
-対応不能・不一致・複数候補はfail closedとし、自動変更しません。
-
-Lab PR #137で、この写像のpublic mechanismを確認しました。
+返されたAudioQueryでは、Pluginが注入した読点に対応するPauseMoraだけを一意に同定し、`VowelLength = 0` にします。SerifにもHatsuonにもtransient読点は保存せず、元からある読点PauseMoraは変更しません。対応不能・不一致・複数候補はfail closedです。
 
 ```text
-clean Serif + <w0> position
-   │
-   ├─ full clean Serif
-   │    └─ same speaker ConvertKanjiToYomiAsync(full)
-   │
-   └─ marker直前prefix
-        └─ same speaker ConvertKanjiToYomiAsync(prefix)
-                 │
-                 ▼
-        normalized prefix reading
-                 │
-                 ▼
-AudioQuery AccentPhrases
-  └─ cumulative Mora.Text phrase-end とexact比較
-                 │
-      unique + PauseMora exists
-                 ▼
-        target PauseMora
+durable Serif + <w0>
+        ↓
+ControlTagParser → clean-text boundary
+        ↓
+same-speaker full/prefix reading
+        ↓
+unique reading insertion point
+        ↓
+transient readingへ「、」を注入
+        ↓
+fresh VOICEVOX automatic accent analysis
+        ↓
+Plugin注入commaのPauseMoraを一意に同定
+        ↓
+そのPauseMoraだけ VowelLength = 0
+        ↓
+public synthesis
 ```
-
-製品側はfull/current reading整合も確認し、manual Hatsuon等で一致しない場合は自動適用しません。
 
 ## 4. Local correction pipeline
 
@@ -113,7 +108,7 @@ VOICEVOX analysis
 AudioQuery / AccentPhrases
   ↓
 Correction Model
-  ├─ zero-pause boundary
+  ├─ forced automatic-accent boundary
   ├─ helper vowel = 0
   ├─ helper consonant = 0
   └─ optional prosody gesture
@@ -143,7 +138,7 @@ synthesis
 
 Correction ModelはLocal AssistとLLM Review Bridgeの共通境界です。
 
-まだschemaはfreezeしていませんが、概念上は次を扱います。
+Review Bridge v0 schemaはfreeze済みで、概念上は次を扱います。
 
 ```text
 CorrectionSet
@@ -230,10 +225,16 @@ VoiceItem.Serif
 
 VoiceItem.Hatsuon
 
-VoiceItem.JimakuVideoEffects
-  └─ Assist Effect
+VoiceItem.AudioEffects
+  └─ Pronunciation Assist
        ├─ IsEnabled
-       └─ plugin settings
+       ├─ BoundaryInputToken
+       ├─ HelperRulesJson
+       └─ Prosody
+
+legacy compatibility read:
+VoiceItem.JimakuVideoEffects
+  └─ PronunciationAssistEffect
 ```
 
 一方、YMM4 4.56.1.0の検証条件では`VoiceItem.Pronounce`はreload後に`null`となり、補正済みAudioQuery自体はproject persistenceではありません。
@@ -424,7 +425,7 @@ private fieldは読みません。特に`TimelineViewModel.timeline` private fie
 
 startupは`IPlugin.Initialize()`へ依存しません。YMM4 4.56.1.0の`IPlugin`は主にplugin metadata surfaceであり、A1ではCLR標準`ModuleInitializer`を意図的に使用します。assembly loadがWPF Application生成より先の場合は、loader thread上にDispatcherを作らず、短い`System.Threading.Timer`で`Application.Current`を待ってUI Dispatcherへ移します。
 
-native run `35961051326` で、Toolを開かない状態から自動runtimeが実VoiceItemを検出し、zero-pause補正とlifecycle復帰まで完走しました。
+native run `35961051326` は旧A1 zero-pause経路のhost lifecycle証拠です。現行vNext runtimeは同じ自動Controller/lease安全性を再利用しつつ、forced-boundary transient-comma解析へ意味を更新しています。
 
 互換性fail-safe:
 
@@ -494,7 +495,7 @@ transient augmented readingをVOICEVOX解析した後は、各helperの「挿入
 - `zeroVowel`: target moraの`VowelLength = 0`
 - `zeroConsonant`: positive consonantを持つtarget moraの`ConsonantLength = 0`。VowelLengthは保持
 - helperと`<w0>`が同一reading boundaryへ重なる場合はfail closed
-- A1/A2が別boundaryなら同じdetached Pronounce上でhelper mutationとPauseMora=0を適用してから1回のfinal synthesisへ送る
+- A1/A2が別boundaryなら同じdetached Pronounce上でhelper mutationとPlugin注入commaのPauseMora=0を適用してから1回のfinal synthesisへ送る
 
 Product PR #3のnative smokeでは、source先頭追加後のanchor relocation、曖昧context時のbaseline復帰、zeroVowel x2、zeroConsonant + vowel保持、A1 `<w0>`との同居、native project save/reload後のhelper rule復元と自動再適用までGREENです。
 
@@ -516,7 +517,7 @@ fresh / transient VOICEVOX Pronounce
         ↓
 A2 helper mutation
         ↓
-A1 zero-pause mutation
+A1 forced-boundary injected-pause mutation
         ↓
 A3 baseline-relative pitch mutation
         ↓
