@@ -117,7 +117,7 @@ Undo/Redoの履歴semanticsに加えて、current `UndoRedoManager` をpublic `T
 
 A0の主要host routeは閉じました。補正WAV差し替え後はpublic `ClearVoiceCache()`でstale cacheを破棄し、regenerated Pronounceを戻して通常のhost state通知へ流します。CIでは物理スピーカーの知覚確認までは主張しませんが、製品統合を止める専用refresh API依存はありません。
 
-A1 Zero-pause boundary MVPは製品コードへ実装済みです。YMM4 4.56.1.0上でToolを開かず自動runtimeが起動し、`<w0>`境界のsame-speaker resolver、pause=0補正、cache更新、disable/re-enable、marker remove/restore、Hatsuon mismatch時のfail-closed baseline復帰までnative GREENになりました。
+旧A1 Zero-pause boundary MVPは、YMM4 4.56.1.0上でToolを開かず自動runtimeが起動し、same-speaker resolver、pause mutation、cache更新、disable/re-enable、marker remove/restore、Hatsuon mismatch時のfail-closed baseline復帰まで通ることを示した**host-route証拠**として残しています。現行vNextでは `<w0>` の製品意味を「VOICEVOX自動アクセント用の強制区切り」へ更新し、transient `、` 再解析方式を使用します。
 
 Product native chain:
 
