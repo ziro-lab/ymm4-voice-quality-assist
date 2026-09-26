@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **PHASE 0–4 GREEN / PHASE 5 NEXT**
+Status: **PHASE 0–5 GREEN / PHASE 6 NEXT**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -307,12 +307,17 @@ No Harmony and no global keyboard interception are used.
 
 ## Phase 5 — Review Bridge alignment
 
-Update:
+Status: **GREEN**
 
-- B1 export descriptions;
-- B2 LLM prompt wording;
-- B3 preview labels;
-- README / architecture / schema docs.
+Accepted validation source: `7898d56f87b1a840af109856e7ac15fc80069a26` (PR #16).
+
+Implemented:
+
+- B1 export descriptions now define `controls.boundaries[].source == "w0"` / CSV `position:w0` as canonical forced automatic-accent boundaries;
+- B2 LLM prompt explicitly defines `addBoundary` as a forced VOICEVOX automatic-accent phrase boundary, not a request to zero an existing source punctuation pause;
+- B3 preview labels use **「VOICEVOX自動アクセント用の強制区切り」**;
+- README / Review Bridge / architecture / schema docs use the vNext meaning;
+- wire/schema remain unchanged.
 
 `addBoundary` retains its wire name and clean-text-position payload.
 
@@ -324,13 +329,35 @@ rather than:
 
 `pause=0境界`.
 
-Regression:
+Acceptance on pinned YMM4 Lite 4.56.1.0:
 
-- B0 fingerprint vectors reviewed;
-- B1 deterministic export;
-- B2 strict validation;
-- B3 exact/stale/missing/ambiguous resolution;
-- one-record Undo/Redo.
+- unit/build: run `36211931194`, job `108320102345`
+  - **207/207 PASS**
+  - 0 build errors
+- A1 native: run `36211931157`, job `108320157770`
+  - artifact `10896415187`
+  - SHA256 `08d21e7acd19fb9472acdda38547b9aaa73c1f471f5f3553e5e03f35dcbee7f9`
+- A2 native: run `36211931167`, job `108320116729`
+  - artifact `10895592442`
+  - SHA256 `669c9c7b4f7949dc9b976c1ccbf2764a543098e88b39cd4239c8f98ad4f39439`
+- A3 native: run `36211931144`, job `108320102973`
+  - artifact `10895394301`
+  - SHA256 `ee18179db6de1b58261a8f251e684108fa29b019cb243ae6d980d1c8389dec7e`
+- B3 + Phase 5 native: run `36211931175`, job `108320172939`
+  - artifact `10895519106`
+  - SHA256 `45ca4a66ff183b6060b057712455f93de0fb069938573101f5577ed6eb0cecda`
+  - `review_boundary_preview_semantics` PASS
+  - `PASS_B3_IMPORT_PRODUCT_NATIVE_SMOKE_E2E`
+  - `PASS_B3_FORCED_BOUNDARY_RESTART_RELOAD_E2E`
+
+Regression acceptance:
+
+- B0 fingerprint/source identity unchanged;
+- B1 export wire unchanged;
+- B2 strict validation unchanged;
+- `addBoundary { position }` wire shape unchanged;
+- B3 exact/stale/missing/ambiguous resolution remains GREEN;
+- one-record Undo/Redo remains GREEN.
 
 ## Phase 6 — Candidate acceptance
 

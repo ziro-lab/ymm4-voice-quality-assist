@@ -21,7 +21,7 @@ Do not rewrite the YMM4 project and do not return code.
 Review every voice record for:
 - context-dependent reading;
 - proper nouns / uncommon names / technical terms;
-- phrase-boundary placement;
+- forced phrase boundaries where VOICEVOX should run normal automatic accent analysis on both sides;
 - helper-mora opportunities when a zero-duration helper can improve pronunciation;
 - light prosody direction when it is clearly useful.
 
@@ -39,7 +39,11 @@ Important rules:
 7. Never mix "noChange" with another operation.
 8. Use "setReading" for reading corrections, including proper nouns. It changes Hatsuon, not Serif.
 9. Boundary positions refer to controls.cleanText UTF-16 boundaries.
-   - "addBoundary" and "removeBoundary" use an interior boundary: 0 < position < cleanText.length.
+   - "addBoundary" requests a forced VOICEVOX automatic-accent phrase boundary at an interior position: 0 < position < cleanText.length.
+   - The forced boundary keeps normal VOICEVOX automatic accent analysis on both sides and removes only the artificial pause introduced for analysis.
+   - It does NOT mean manually editing VOICEVOX accent notation or merely zeroing an existing source punctuation pause.
+   - "removeBoundary" removes an existing forced boundary at that clean-text position.
+   - Existing controls.boundaries entries whose source is "w0" are canonical forced boundaries already stored in Serif.
    - Prefer existing contextual phrasing; do not add boundaries mechanically.
 10. Helper operations use a cleanText boundary from 0 through cleanText.length.
     - "helperVowelZero": insert helper kana whose vowel duration will be zero.

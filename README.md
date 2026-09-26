@@ -5,7 +5,7 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 このプロジェクトの目的は、音声を完全自動で仕上げることではありません。  
 **「手直しが必要でも、最初から直しやすい状態にする」**ことを重視します。
 
-> Status: **vNext Phase 1–4 GREEN / Phase 5 Review Bridge alignment next**  
+> Status: **vNext Phase 1–5 GREEN / Phase 6 candidate acceptance next**  
 > 現時点では配布版プラグインはありません。
 
 ## vNext 現在地
@@ -20,7 +20,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 - Harmony/private collection traversalはこの移行に不要です。
 - Phase 3もGREENです。Audio Effect内にtyped helper editorと抑揚selectorを実装し、raw `HelperRulesJson` をユーザー操作から隠しました。実YMM4でhelper追加→Undo→Redoまで確認済みです。
 - Phase 4もGREENです。Audio Effectで編集用tokenを設定し、Toolの明示操作でcanonical `<w0>`へ変換できます。自動キー横取りは行わず、YMM4標準Undo/Redoで1履歴、save→正常終了→再起動→public `OpenProject(path)` 後のmarker/token復元まで実YMM4で確認済みです。
-- 次はPhase 5として、Review Bridgeの `addBoundary` 説明・prompt・previewを新しい「VOICEVOX自動アクセント用の強制区切り」 semanticsへ揃えます。
+- Phase 5もGREENです。Review Bridgeの `addBoundary` wire名とclean-text `position` payloadを変えず、LLM prompt・Import preview・B1/Schema/Architecture説明を **「VOICEVOX自動アクセント用の強制区切り」** semanticsへ統一しました。実YMM4 B3でもpreview semanticsを確認済みです。
+- 次はPhase 6として、candidate packageと実VOICEVOX聴感を含む最終acceptanceへ進みます。
 
 正本:
 - `docs/VNEXT_PRONUNCIATION_ASSIST_REQUIREMENTS.md`
@@ -30,8 +31,8 @@ YukkuriMovieMaker4（YMM4）上で、VOICEVOXの**読み・発音・句境界・
 
 | Track | 役割 | 主な処理 |
 | --- | --- | --- |
-| **A. Local Pronunciation Assist** | YMM4内で軽量・決定的に補正する | 句境界、pause=0、補助モーラ、再適用、将来の軽量prosody gesture |
-| **B. Voice Review Bridge** | Voice一覧をExport/Importし、LLMに文脈レビューさせる | 読み、固有名詞、句境界、補助文字候補、レビュー差分 |
+| **A. Local Pronunciation Assist** | YMM4内で軽量・決定的に補正する | 強制区切り（自動アクセント再解析）、補助モーラ、再適用、軽量prosody gesture |
+| **B. Voice Review Bridge** | Voice一覧をExport/Importし、LLMに文脈レビューさせる | 読み、固有名詞、強制区切り候補、補助文字候補、レビュー差分 |
 
 両者は別製品ではなく、同じ**Correction Model**を共有する想定です。
 
@@ -117,7 +118,7 @@ Undo/Redoの履歴semanticsに加えて、current `UndoRedoManager` をpublic `T
 
 A0の主要host routeは閉じました。補正WAV差し替え後はpublic `ClearVoiceCache()`でstale cacheを破棄し、regenerated Pronounceを戻して通常のhost state通知へ流します。CIでは物理スピーカーの知覚確認までは主張しませんが、製品統合を止める専用refresh API依存はありません。
 
-A1 Zero-pause boundary MVPは製品コードへ実装済みです。YMM4 4.56.1.0上でToolを開かず自動runtimeが起動し、`<w0>`境界のsame-speaker resolver、pause=0補正、cache更新、disable/re-enable、marker remove/restore、Hatsuon mismatch時のfail-closed baseline復帰までnative GREENになりました。
+旧A1 Zero-pause boundary MVPは、YMM4 4.56.1.0上でToolを開かず自動runtimeが起動し、same-speaker resolver、pause mutation、cache更新、disable/re-enable、marker remove/restore、Hatsuon mismatch時のfail-closed baseline復帰まで通ることを示した**host-route証拠**として残しています。現行vNextでは `<w0>` の製品意味を「VOICEVOX自動アクセント用の強制区切り」へ更新し、transient `、` 再解析方式を使用します。
 
 Product native chain:
 
