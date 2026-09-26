@@ -82,16 +82,64 @@ public sealed class ForcedBoundaryTextEditorTests
     {
         var result =
             ForcedBoundaryTextEditor.NormalizeToken(
-                "A||||B",
+                "A||B||C",
                 "||");
 
         Assert.True(result.IsSuccess);
         Assert.Equal(
-            "A<w0><w0>B",
+            "A<w0>B<w0>C",
             result.UpdatedSerif);
         Assert.Equal(
             2,
             result.ChangedBoundaryCount);
+    }
+
+    [Theory]
+    [InlineData("|ABC")]
+    [InlineData("ABC|")]
+    public void NormalizeToken_EndpointBoundary_FailsClosed(
+        string serif)
+    {
+        var result =
+            ForcedBoundaryTextEditor.NormalizeToken(
+                serif,
+                "|");
+
+        Assert.Equal(
+            ForcedBoundaryTextEditStatus.InvalidPosition,
+            result.Status);
+        Assert.Null(
+            result.UpdatedSerif);
+    }
+
+    [Fact]
+    public void NormalizeToken_AdjacentTokensSameBoundary_FailsClosed()
+    {
+        var result =
+            ForcedBoundaryTextEditor.NormalizeToken(
+                "A||B",
+                "|");
+
+        Assert.Equal(
+            ForcedBoundaryTextEditStatus.InvalidPosition,
+            result.Status);
+        Assert.Null(
+            result.UpdatedSerif);
+    }
+
+    [Fact]
+    public void NormalizeToken_BesideExistingCanonicalMarker_FailsClosed()
+    {
+        var result =
+            ForcedBoundaryTextEditor.NormalizeToken(
+                "A<w0>|B",
+                "|");
+
+        Assert.Equal(
+            ForcedBoundaryTextEditStatus.InvalidPosition,
+            result.Status);
+        Assert.Null(
+            result.UpdatedSerif);
     }
 
     [Fact]
