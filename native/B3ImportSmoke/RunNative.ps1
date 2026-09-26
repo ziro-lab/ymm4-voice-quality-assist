@@ -302,10 +302,30 @@ try {
       throw 'Phase 4 persistence project missing'
     }
 
-    # End the full B3 host before proving real restart/reload persistence.
+    # End the full B3 host cleanly before proving real restart/reload
+    # persistence. A forced kill can make the next YMM4 launch recover in a
+    # mode where normal plugin startup is not representative.
     if(-not$process.HasExited){
-      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-      Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+      foreach($w in (Get-VqaB3Windows)){
+        if($w.Title -like 'YukkuriMovieMaker*'){
+          [void][VqaB3Win32]::PostMessage(
+            $w.Handle,
+            0x0010,
+            [IntPtr]::Zero,
+            [IntPtr]::Zero
+          )
+        }
+      }
+
+      $closeLimit=[DateTime]::UtcNow.AddSeconds(15)
+      while([DateTime]::UtcNow-lt$closeLimit -and -not$process.HasExited){
+        Start-Sleep -Milliseconds 250
+      }
+
+      if(-not$process.HasExited){
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+      }
     }
 
     $reloadResult=Join-Path $OutputDir 'reload-result.json'
