@@ -98,6 +98,7 @@ internal static class Probe
         string project)
     {
         var ticks = 0;
+        var opening = false;
 
         var timer =
             new DispatcherTimer(
@@ -108,8 +109,11 @@ internal static class Probe
             };
 
         timer.Tick +=
-            (_, _) =>
+            async (_, _) =>
             {
+                if (opening)
+                    return;
+
                 try
                 {
                     ticks++;
@@ -134,26 +138,39 @@ internal static class Probe
                         return;
                     }
 
+                    opening = true;
+                    timer.Stop();
+
+                    var open =
+                        PublicMethod(
+                            main,
+                            "OpenProject",
+                            typeof(string));
+
+                    await InvokePublicProjectMethodAsync(
+                        open,
+                        main,
+                        project,
+                        "OpenProject");
+
                     const string remark =
                         "B3_FORCED_BOUNDARY_INPUT";
+
+                    await WaitUntil(
+                        "phase4 restart public OpenProject",
+                        () =>
+                            FindVoiceFromActiveTimeline(
+                                main,
+                                remark)
+                            is not null,
+                        30_000);
 
                     var voice =
                         FindVoiceFromActiveTimeline(
                             main,
-                            remark);
-
-                    if (voice is null)
-                    {
-                        if (ticks > 240)
-                        {
-                            throw new TimeoutException(
-                                "Saved Phase 4 VoiceItem was not loaded from the command-line project.");
-                        }
-
-                        return;
-                    }
-
-                    timer.Stop();
+                            remark)
+                        ?? throw new InvalidOperationException(
+                            "Saved Phase 4 VoiceItem was not loaded through public OpenProject.");
 
                     WriteReloadResult(
                         project,
