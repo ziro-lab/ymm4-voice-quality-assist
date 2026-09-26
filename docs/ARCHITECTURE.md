@@ -595,9 +595,9 @@ same-sessionは`exportRef -> live VoiceItem` mapを優先します。frame/layer
 
 B3 journalはgenerated Pronounce/WAVを保持しません。Undo/Redo対象はSerif / Hatsuon / Assist Effect membership / HelperRulesJson / Prosodyなどdurable sourceのみです。derived audioはTrack A runtimeが再生成します。
 
-boundary rewriteはv0安全境界として通常text + literal `<w0>` のSerifだけを対象にし、他official control tagが混在する場合はfail closedします。
+強制区切りrewriteはv0安全境界として通常text + literal `<w0>` のSerifだけを対象にし、他official control tagが混在する場合はfail closedします。Review Bridgeの `addBoundary` はwire名を維持したまま、**VOICEVOX自動アクセント用の強制区切り** を意味します。Import previewも同じ語で表示します。
 
-Product-native run `35993465363` では、EXACT apply後にpause=0 + helper vowel=0 + Hold pitchが同じfinal synthesisへ入り、Undoでbaseline WAV、Redoで同一corrected WAVへ戻ることを確認しました。
+旧Product-native run `35993465363` はB3のresolution / atomic apply / Undo/Redo host mechanics証拠として保持します。現行vNextではPhase 4 B3 nativeでforced-boundary semanticsを通し、canonical `<w0>` → transient `、` → fresh automatic accent analysis → Plugin注入PauseMoraだけ0、というTrack A再生成へ接続しています。
 
 ## 7. Host integration policy
 
