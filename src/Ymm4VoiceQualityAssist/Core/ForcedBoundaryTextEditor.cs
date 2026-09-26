@@ -111,6 +111,15 @@ public static class ForcedBoundaryTextEditor
         var changed =
             0;
 
+        var cleanPosition =
+            0;
+
+        var tokenBoundaryPositions =
+            new List<int>();
+
+        var existingCanonicalPositions =
+            new HashSet<int>();
+
         for (var index = 0;
              index < serif.Length;)
         {
@@ -130,10 +139,25 @@ public static class ForcedBoundaryTextEditor
                         "閉じていないYMM4制御タグがあるため、強制区切りを変換しませんでした。");
                 }
 
+                var tagLength =
+                    close - index + 1;
+
+                if (tagLength
+                        == CanonicalMarker.Length
+                    && serif.AsSpan(
+                            index,
+                            tagLength)
+                        .SequenceEqual(
+                            CanonicalMarker))
+                {
+                    existingCanonicalPositions.Add(
+                        cleanPosition);
+                }
+
                 builder.Append(
                     serif,
                     index,
-                    close - index + 1);
+                    tagLength);
 
                 index =
                     close + 1;
@@ -146,6 +170,9 @@ public static class ForcedBoundaryTextEditor
                     token,
                     StringComparison.Ordinal))
             {
+                tokenBoundaryPositions.Add(
+                    cleanPosition);
+
                 builder.Append(
                     CanonicalMarker);
 
@@ -159,6 +186,7 @@ public static class ForcedBoundaryTextEditor
             builder.Append(
                 serif[index]);
 
+            cleanPosition++;
             index++;
         }
 
@@ -171,14 +199,59 @@ public static class ForcedBoundaryTextEditor
                 "変換対象の入力記号はありません。");
         }
 
+        if (tokenBoundaryPositions
+                .Distinct()
+                .Count()
+            != tokenBoundaryPositions.Count)
+        {
+            return new(
+                ForcedBoundaryTextEditStatus.InvalidPosition,
+                null,
+                0,
+                "同じ本文位置に複数の入力記号が連続しているため、強制区切りを変換しませんでした。");
+        }
+
+        if (tokenBoundaryPositions.Any(x =>
+                existingCanonicalPositions.Contains(
+                    x)))
+        {
+            return new(
+                ForcedBoundaryTextEditStatus.InvalidPosition,
+                null,
+                0,
+                "既存の強制区切りと同じ本文位置に入力記号があるため、重複変換を中止しました。");
+        }
+
+        if (tokenBoundaryPositions.Any(x =>
+                x <= 0
+                || x >= cleanPosition))
+        {
+            return new(
+                ForcedBoundaryTextEditStatus.InvalidPosition,
+                null,
+                0,
+                "本文の先頭または末尾には強制区切りを作成できません。");
+        }
+
         var updated =
             builder.ToString();
 
         try
         {
-            _ =
+            var verified =
                 BoundaryMarkerParser.Parse(
                     updated);
+
+            if (tokenBoundaryPositions.Any(x =>
+                    !verified.ZeroWaitPositions
+                        .Contains(x)))
+            {
+                return new(
+                    ForcedBoundaryTextEditStatus.InvalidSource,
+                    null,
+                    0,
+                    "変換した強制区切りを同じ本文位置で再確認できなかったため、変更しませんでした。");
+            }
         }
         catch (Exception ex)
         {
