@@ -184,6 +184,7 @@ try {
       'correction_package_valid',
       'import_plan_built',
       'selected_exact_session',
+      'review_boundary_preview_semantics',
       'changed_voice_is_stale',
       'stale_selection_rejected',
       'exact_selection_prepared',
