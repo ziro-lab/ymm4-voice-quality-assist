@@ -706,6 +706,22 @@ internal static class Probe
                     .ExactSessionMatch
                 && selectedPlan.CanApply);
 
+            var selectedPreviewText =
+                selectedPlan.Preview is { } preview
+                    ? ReviewImportPreviewText.Format(
+                        preview)
+                    : string.Empty;
+
+            Check(
+                "review_boundary_preview_semantics",
+                selectedPreviewText.Contains(
+                    ReviewImportPreviewText
+                        .ForcedBoundaryLabel,
+                    StringComparison.Ordinal)
+                && !selectedPreviewText.Contains(
+                    "pause=0",
+                    StringComparison.OrdinalIgnoreCase));
+
             Check(
                 "changed_voice_is_stale",
                 stalePlan
