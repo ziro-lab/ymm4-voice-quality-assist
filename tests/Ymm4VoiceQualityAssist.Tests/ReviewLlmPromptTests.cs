@@ -65,6 +65,22 @@ public sealed class ReviewLlmPromptTests
             prompt,
             StringComparison.Ordinal);
 
+        Assert.Contains(
+            "forced VOICEVOX automatic-accent phrase boundary",
+            prompt,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "does NOT mean manually editing VOICEVOX accent notation or merely zeroing an existing source punctuation pause",
+            prompt,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "source is \"w0\"",
+            prompt,
+            StringComparison.Ordinal);
+
+
         foreach (var operation in new[]
         {
             "setReading",
