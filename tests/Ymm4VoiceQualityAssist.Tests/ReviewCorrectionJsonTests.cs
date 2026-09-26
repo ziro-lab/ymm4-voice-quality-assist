@@ -94,6 +94,61 @@ public sealed class ReviewCorrectionJsonTests
     }
 
     [Fact]
+    public void AddBoundary_WireShape_RemainsTypeAndPositionOnly()
+    {
+        var wire =
+            new ReviewCorrectionWirePackage(
+                ReviewCorrectionValidator.Schema,
+                "session-b2",
+                [
+                    new ReviewCorrectionWireRecord(
+                        "voice-000000",
+                        FingerprintA,
+                        [
+                            new ReviewCorrectionWireOperation(
+                                "addBoundary",
+                                Position: 2),
+                        ]),
+                ]);
+
+        var json =
+            ReviewCorrectionJson.Serialize(
+                wire);
+
+        Assert.Contains(
+            "\"type\": \"addBoundary\"",
+            json,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "\"position\": 2",
+            json,
+            StringComparison.Ordinal);
+
+        Assert.DoesNotContain(
+            "pause",
+            json,
+            StringComparison.OrdinalIgnoreCase);
+
+        var decoded =
+            ReviewCorrectionJson.Decode(
+                json);
+
+        var proposal =
+            Assert.Single(
+                decoded.Proposals);
+
+        var boundary =
+            Assert.IsType<AddBoundaryCorrection>(
+                Assert.Single(
+                    proposal.Operations));
+
+        Assert.Equal(
+            2,
+            boundary.CleanTextPosition);
+    }
+
+    [Fact]
     public void Decode_InvalidJson_Fails()
     {
         var result =
