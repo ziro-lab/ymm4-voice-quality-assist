@@ -1,6 +1,6 @@
 # Pronunciation Assist vNext — Implementation Plan
 
-Status: **PHASE 0–4 GREEN / PHASE 5 NEXT**
+Status: **PHASE 0–4 GREEN / PHASE 5 IMPLEMENTED, VALIDATION PENDING**
 
 Base candidate:
 - branch: `work/candidate-readiness`
@@ -307,12 +307,15 @@ No Harmony and no global keyboard interception are used.
 
 ## Phase 5 — Review Bridge alignment
 
-Update:
+Status: **IMPLEMENTED / VALIDATION PENDING**
 
-- B1 export descriptions;
-- B2 LLM prompt wording;
-- B3 preview labels;
-- README / architecture / schema docs.
+Implemented:
+
+- B1 export descriptions now define `controls.boundaries[].source == "w0"` / CSV `position:w0` as canonical forced automatic-accent boundaries;
+- B2 LLM prompt explicitly defines `addBoundary` as a forced VOICEVOX automatic-accent phrase boundary, not a request to zero an existing source punctuation pause;
+- B3 preview labels use **「VOICEVOX自動アクセント用の強制区切り」**;
+- README / Review Bridge / architecture / schema docs use the vNext meaning;
+- wire/schema remain unchanged.
 
 `addBoundary` retains its wire name and clean-text-position payload.
 
