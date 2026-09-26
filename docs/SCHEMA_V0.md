@@ -143,6 +143,8 @@ Local parserで取れる情報はLLMに再解析させない。
 }
 ```
 
+`controls.boundaries` はSerifへ既に保存されている **VOICEVOX自動アクセント用の強制区切り** を表す。`source: "w0"` はcanonical durable marker `<w0>` 由来であることを示す。元からある日本語読点や通常pauseの一覧ではない。
+
 ### Failure policy
 
 enabled Assist Effectのhelper JSONが壊れているなど、B0 fingerprint materialを正確に作れないVoiceが1件でもあればwhole exportをfail closedする。劣化したpackageを黙って出力しない。
@@ -186,6 +188,10 @@ prosody gesture:
 ### Review semantics
 
 - 読み・固有名詞・専門語は `setReading` でHatsuon候補を返す。Serifは書き換えない。
+- `addBoundary { position }` は `controls.cleanText` のinterior UTF-16 boundaryへ **VOICEVOX自動アクセント用の強制区切り** を追加する要求。既存source punctuation pauseを単に0にする意味ではない。
+- `removeBoundary { position }` は同位置のcanonical `<w0>` 強制区切りを削除する要求。
+- add/removeのwire名と `position` payloadはv0のまま維持する。
+- Track A適用時はcanonical `<w0>` から解析時だけ `、` を注入してVOICEVOXへ自動アクセント再解析させ、Plugin注入PauseMoraだけを0にする。元の読点pauseは変更しない。
 - boundary positionは `controls.cleanText` のUTF-16 boundary。add/removeはinteriorのみ。
 - helper positionは0〜cleanText lengthのboundary。
 - helperは発音上妥当な場合だけ提案する。
@@ -241,7 +247,7 @@ typed validation coreでImport前に次を拒否します。
 17. normalize後empty helper
 18. 同一clean-text boundaryへの複数helper
 
-boundaryはA1仕様に合わせてclean textの**interior**のみ。helperはA2仕様に合わせて0〜cleanTextLengthの境界を許可します。
+強制区切りはvNext A1仕様に合わせてclean textの**interior**のみ。helperはA2仕様に合わせて0〜cleanTextLengthの境界を許可します。
 
 before/after diff生成、JSON wire parsing、実YMM4 mutation、Undo単位化はB1/B3側です。
 
